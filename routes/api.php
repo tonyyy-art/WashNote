@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\HargaLayananController;
 use App\Http\Controllers\Api\JamOperasionalController;
 use App\Http\Controllers\Api\KategoriKendaraanController;
@@ -48,6 +49,8 @@ Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
                 'message' => 'Akses operasional berhasil.',
             ]);
         });
+
+        Route::get('/katalog', [CatalogController::class, 'index']);
 
         Route::get('/pesanan', [PesananController::class, 'index']);
         Route::post('/pesanan', [PesananController::class, 'store']);
