@@ -661,6 +661,639 @@ Status pembayaran dan status pengerjaan kendaraan adalah dua hal
 berbeda. Kendaraan dapat selesai dikerjakan sementara pembayaran masih
 belum dibayar, sesuai alur operasional yang diterapkan.
 
+# Contoh Output API WashNote
+
+**Penting:** Semua JSON di dokumen ini adalah contoh ilustratif, bukan
+hasil pemanggilan backend secara langsung. Sesuaikan nama field, pesan,
+dan pembungkus `data` dengan response aktual dari controller. Base URL
+contoh: `http://127.0.0.1:8000/api`.
+
+Untuk endpoint terproteksi, gunakan header:
+
+``` http
+Accept: application/json
+Authorization: Bearer TOKEN_ANDA
+Content-Type: application/json
+```
+
+## 1. Autentikasi
+
+### POST `/login`
+
+Request:
+
+``` json
+{"username":"owner","password":"WashNote123!"}
+```
+
+Response `200`:
+
+``` json
+{
+  "message":"Login berhasil",
+  "token":"1|contoh_token_sanctum",
+  "user":{"id_pengguna":1,"nama_lengkap":"Pemilik WashNote","username":"owner","peran":"owner","status_aktif":true}
+}
+```
+
+### POST `/logout`
+
+Response `200`:
+
+``` json
+{"message":"Logout berhasil"}
+```
+
+### GET `/profile`
+
+Response `200`:
+
+``` json
+{"id_pengguna":1,"nama_lengkap":"Pemilik WashNote","username":"owner","peran":"owner","status_aktif":true}
+```
+
+## 2. Endpoint uji role
+
+### GET `/operasional/test`
+
+Response contoh:
+
+``` json
+{"message":"Akses operasional berhasil","user":{"id_pengguna":2,"username":"kasir01","peran":"kasir"}}
+```
+
+### GET `/owner/test`
+
+Response contoh:
+
+``` json
+{"message":"Akses owner berhasil"}
+```
+
+Jika token Kasir memanggil endpoint Owner, response `403` contoh:
+
+``` json
+{"message":"Anda tidak memiliki akses"}
+```
+
+## 3. Kategori kendaraan
+
+### GET `/kategori-kendaraan`
+
+``` json
+{"data":[
+  {"id_kategori_kendaraan":1,"jenis_kendaraan":"motor","nama_kategori":"Motor Kecil","status_aktif":true},
+  {"id_kategori_kendaraan":2,"jenis_kendaraan":"mobil","nama_kategori":"Mobil Keluarga","status_aktif":true}
+]}
+```
+
+### POST `/kategori-kendaraan`
+
+Request:
+
+``` json
+{"jenis_kendaraan":"motor","nama_kategori":"Motor Besar","status_aktif":true}
+```
+
+Response:
+
+``` json
+{"message":"Kategori kendaraan berhasil ditambahkan","data":{"id_kategori_kendaraan":3,"jenis_kendaraan":"motor","nama_kategori":"Motor Besar","status_aktif":true}}
+```
+
+### GET `/kategori-kendaraan/{id}`
+
+``` json
+{"data":{"id_kategori_kendaraan":1,"jenis_kendaraan":"motor","nama_kategori":"Motor Kecil","status_aktif":true}}
+```
+
+### PUT/PATCH `/kategori-kendaraan/{id}`
+
+Request:
+
+``` json
+{"jenis_kendaraan":"motor","nama_kategori":"Motor Matic","status_aktif":true}
+```
+
+Response:
+
+``` json
+{"message":"Kategori kendaraan berhasil diperbarui","data":{"id_kategori_kendaraan":1,"jenis_kendaraan":"motor","nama_kategori":"Motor Matic","status_aktif":true}}
+```
+
+### DELETE `/kategori-kendaraan/{id}`
+
+``` json
+{"message":"Kategori kendaraan berhasil dinonaktifkan"}
+```
+
+## 4. Layanan
+
+### GET `/layanan`
+
+``` json
+{"data":[
+  {"id_layanan":1,"nama_layanan":"Cuci Reguler","deskripsi":"Pencucian reguler","status_aktif":true},
+  {"id_layanan":2,"nama_layanan":"Cuci Premium","deskripsi":"Pencucian premium","status_aktif":true}
+]}
+```
+
+### POST `/layanan`
+
+Request:
+
+``` json
+{"nama_layanan":"Cuci Premium","deskripsi":"Pencucian kendaraan dengan layanan tambahan","status_aktif":true}
+```
+
+Response:
+
+``` json
+{"message":"Layanan berhasil ditambahkan","data":{"id_layanan":2,"nama_layanan":"Cuci Premium","deskripsi":"Pencucian kendaraan dengan layanan tambahan","status_aktif":true}}
+```
+
+### GET `/layanan/{id}`
+
+``` json
+{"data":{"id_layanan":1,"nama_layanan":"Cuci Reguler","deskripsi":"Pencucian reguler","status_aktif":true}}
+```
+
+### PUT/PATCH `/layanan/{id}`
+
+Request:
+
+``` json
+{"nama_layanan":"Cuci Reguler Plus","deskripsi":"Reguler dengan tambahan poles","status_aktif":true}
+```
+
+Response:
+
+``` json
+{"message":"Layanan berhasil diperbarui","data":{"id_layanan":1,"nama_layanan":"Cuci Reguler Plus","deskripsi":"Reguler dengan tambahan poles","status_aktif":true}}
+```
+
+### DELETE `/layanan/{id}`
+
+``` json
+{"message":"Layanan berhasil dinonaktifkan"}
+```
+
+## 5. Harga layanan
+
+### GET `/harga-layanan`
+
+``` json
+{"data":[{"id_harga":1,"id_layanan":1,"id_kategori_kendaraan":1,"harga_dasar":"15000.00","batas_bawah":"12000.00","batas_atas":"20000.00","status_aktif":true}]}
+```
+
+### POST `/harga-layanan`
+
+Request:
+
+``` json
+{"id_layanan":1,"id_kategori_kendaraan":1,"harga_dasar":15000,"batas_bawah":12000,"batas_atas":20000,"status_aktif":true}
+```
+
+Response:
+
+``` json
+{"message":"Harga layanan berhasil ditambahkan","data":{"id_harga":1,"id_layanan":1,"id_kategori_kendaraan":1,"harga_dasar":"15000.00","batas_bawah":"12000.00","batas_atas":"20000.00","status_aktif":true}}
+```
+
+### GET `/harga-layanan/{id}`
+
+``` json
+{"data":{"id_harga":1,"id_layanan":1,"id_kategori_kendaraan":1,"harga_dasar":"15000.00","batas_bawah":"12000.00","batas_atas":"20000.00","status_aktif":true}}
+```
+
+### PUT/PATCH `/harga-layanan/{id}`
+
+Request:
+
+``` json
+{"harga_dasar":16000,"batas_bawah":13000,"batas_atas":21000,"status_aktif":true}
+```
+
+Response:
+
+``` json
+{"message":"Harga layanan berhasil diperbarui","data":{"id_harga":1,"harga_dasar":"16000.00","batas_bawah":"13000.00","batas_atas":"21000.00","status_aktif":true}}
+```
+
+### DELETE `/harga-layanan/{id}`
+
+``` json
+{"message":"Harga layanan berhasil dinonaktifkan"}
+```
+
+## 6. Pesanan dan kendaraan
+
+### GET `/pesanan`
+
+``` json
+{"data":[{"id_pesanan":10,"id_pengguna":2,"waktu_pesanan":"2026-11-21T09:00:00+07:00","status_pesanan":"berjalan","alasan_pembatalan":null,"di_luar_jam_operasional":false}]}
+```
+
+### POST `/pesanan`
+
+Header idempotensi:
+
+``` http
+Idempotency-Key: order-20261121-001
+```
+
+Request ilustratif:
+
+``` json
+{"kendaraan":[{"id_kategori_kendaraan":1,"layanan":[{"id_harga":1,"harga_akhir":15000}]}]}
+```
+
+Response ilustratif:
+
+``` json
+{
+  "message":"Pesanan berhasil dibuat",
+  "data":{
+    "id_pesanan":10,"id_pengguna":2,"waktu_pesanan":"2026-11-21T09:00:00+07:00",
+    "status_pesanan":"berjalan","di_luar_jam_operasional":false,
+    "kendaraan":[{
+      "id_kendaraan_pesanan":20,"id_kategori_kendaraan":1,
+      "nama_kategori_snapshot":"Motor Kecil","status_proses":"menunggu",
+      "detail_layanan":[{"id_detail_layanan":30,"id_harga":1,"harga_dasar_snapshot":"15000.00","harga_akhir":"15000.00"}]
+    }],
+    "pembayaran":{"id_pembayaran":10,"jumlah_dibayar":null,"metode_pembayaran":null,"status_pembayaran":"belum_dibayar","waktu_penerimaan":null},
+    "total":15000
+  }
+}
+```
+
+### GET `/pesanan/{pesanan}`
+
+``` json
+{"data":{"id_pesanan":10,"status_pesanan":"berjalan","kendaraan":[{"id_kendaraan_pesanan":20,"nama_kategori_snapshot":"Motor Kecil","status_proses":"menunggu","detail_layanan":[{"id_detail_layanan":30,"harga_dasar_snapshot":"15000.00","harga_akhir":"15000.00"}]}],"pembayaran":{"status_pembayaran":"belum_dibayar"}}}
+```
+
+### PUT `/pesanan/{pesanan}`
+
+Request:
+
+``` json
+{"alasan":"Seluruh kendaraan telah selesai","status_pesanan":"selesai"}
+```
+
+Response:
+
+``` json
+{"message":"Pesanan berhasil diperbarui","data":{"id_pesanan":10,"status_pesanan":"selesai"}}
+```
+
+Implementasi awal endpoint ini hanya memperbarui field yang ditangani
+oleh `PesananController`, bukan seluruh detail kendaraan/layanan.
+
+### POST `/pesanan/{pesanan}/batal`
+
+Request:
+
+``` json
+{"alasan_pembatalan":"Pelanggan membatalkan pesanan"}
+```
+
+Response:
+
+``` json
+{"message":"Pesanan berhasil dibatalkan","data":{"id_pesanan":10,"status_pesanan":"dibatalkan","alasan_pembatalan":"Pelanggan membatalkan pesanan"}}
+```
+
+### PUT `/kendaraan-pesanan/{id}/status`
+
+Request:
+
+``` json
+{"status_proses":"proses"}
+```
+
+Response:
+
+``` json
+{"message":"Status kendaraan berhasil diperbarui","data":{"id_kendaraan_pesanan":20,"status_proses":"proses"}}
+```
+
+## 7. Pembayaran
+
+### GET `/pesanan/{id}/pembayaran`
+
+``` json
+{"data":{"id_pembayaran":10,"id_pesanan":10,"jumlah_dibayar":null,"metode_pembayaran":null,"status_pembayaran":"belum_dibayar","waktu_penerimaan":null}}
+```
+
+### POST `/pesanan/{id}/pembayaran`
+
+Request:
+
+``` json
+{"jumlah_dibayar":15000,"metode_pembayaran":"tunai"}
+```
+
+Response:
+
+``` json
+{"message":"Pembayaran berhasil dicatat","data":{"id_pembayaran":10,"id_pesanan":10,"jumlah_dibayar":"15000.00","metode_pembayaran":"tunai","status_pembayaran":"sudah_dibayar","waktu_penerimaan":"2026-11-21T09:30:00+07:00"}}
+```
+
+## 8. Riwayat perubahan
+
+### GET `/riwayat-perubahan`
+
+``` json
+{
+  "data":[{
+    "id_riwayat":1,"id_pengguna":2,"entitas":"Pesanan","record_id":10,
+    "waktu_perubahan":"2026-11-21T09:20:00+07:00",
+    "nilai_sebelum":{"status_pesanan":"berjalan"},
+    "nilai_sesudah":{"status_pesanan":"dibatalkan"},
+    "alasan":"Pelanggan membatalkan pesanan"
+  }],
+  "current_page":1,"per_page":15,"total":1
+}
+```
+
+## 9. Kategori pengeluaran
+
+### GET `/kategori-pengeluaran`
+
+``` json
+{"data":[{"id_kategori_pengeluaran":1,"nama_kategori":"Bahan pembersih","status_aktif":true},{"id_kategori_pengeluaran":2,"nama_kategori":"Listrik dan air","status_aktif":true}]}
+```
+
+### POST `/kategori-pengeluaran`
+
+Request:
+
+``` json
+{"nama_kategori":"Perawatan alat","status_aktif":true}
+```
+
+Response:
+
+``` json
+{"message":"Kategori pengeluaran berhasil ditambahkan","data":{"id_kategori_pengeluaran":3,"nama_kategori":"Perawatan alat","status_aktif":true}}
+```
+
+### GET `/kategori-pengeluaran/{id}`
+
+``` json
+{"data":{"id_kategori_pengeluaran":1,"nama_kategori":"Bahan pembersih","status_aktif":true}}
+```
+
+### PUT/PATCH `/kategori-pengeluaran/{id}`
+
+Request:
+
+``` json
+{"nama_kategori":"Bahan kimia pembersih","status_aktif":true}
+```
+
+Response:
+
+``` json
+{"message":"Kategori pengeluaran berhasil diperbarui","data":{"id_kategori_pengeluaran":1,"nama_kategori":"Bahan kimia pembersih","status_aktif":true}}
+```
+
+### DELETE `/kategori-pengeluaran/{id}`
+
+``` json
+{"message":"Kategori pengeluaran berhasil dinonaktifkan"}
+```
+
+## 10. Pengeluaran
+
+### GET `/pengeluaran`
+
+``` json
+{"data":[{"id_pengeluaran":1,"id_pengguna":1,"id_kategori_pengeluaran":1,"tanggal_pengeluaran":"2026-11-21","deskripsi":"Pembelian sabun kendaraan","nominal":"100000.00","status_pengeluaran":"aktif"}]}
+```
+
+### POST `/pengeluaran`
+
+Request ilustratif:
+
+``` json
+{"id_kategori_pengeluaran":1,"tanggal_pengeluaran":"2026-11-21","deskripsi":"Pembelian sabun kendaraan","nominal":100000}
+```
+
+Response:
+
+``` json
+{"message":"Pengeluaran berhasil ditambahkan","data":{"id_pengeluaran":1,"id_pengguna":1,"id_kategori_pengeluaran":1,"tanggal_pengeluaran":"2026-11-21","deskripsi":"Pembelian sabun kendaraan","nominal":"100000.00","status_pengeluaran":"aktif"}}
+```
+
+### PUT/PATCH `/pengeluaran/{id}`
+
+Request ilustratif:
+
+``` json
+{"id_kategori_pengeluaran":1,"tanggal_pengeluaran":"2026-11-21","deskripsi":"Pembelian sabun dan sampo","nominal":125000,"alasan":"Koreksi sesuai nota"}
+```
+
+Response:
+
+``` json
+{"message":"Pengeluaran berhasil diperbarui","data":{"id_pengeluaran":1,"deskripsi":"Pembelian sabun dan sampo","nominal":"125000.00","status_pengeluaran":"aktif"}}
+```
+
+### PATCH `/pengeluaran/{id}/batal`
+
+Request ilustratif:
+
+``` json
+{"alasan":"Salah input"}
+```
+
+Response:
+
+``` json
+{"message":"Pengeluaran berhasil dibatalkan","data":{"id_pengeluaran":1,"status_pengeluaran":"dibatalkan"}}
+```
+
+## 11. Jam operasional
+
+### GET `/jam-operasional`
+
+``` json
+{"data":[{"id_jam_operasional":1,"hari":"Senin","status_buka":true,"jam_buka":"08:00:00","jam_tutup":"20:00:00","id_pengguna":1},{"id_jam_operasional":2,"hari":"Minggu","status_buka":false,"jam_buka":null,"jam_tutup":null,"id_pengguna":1}]}
+```
+
+### POST `/jam-operasional`
+
+Request:
+
+``` json
+{"hari":"Senin","status_buka":true,"jam_buka":"08:00","jam_tutup":"20:00"}
+```
+
+Response:
+
+``` json
+{"message":"Jam operasional berhasil ditambahkan","data":{"id_jam_operasional":1,"hari":"Senin","status_buka":true,"jam_buka":"08:00:00","jam_tutup":"20:00:00","id_pengguna":1}}
+```
+
+### PUT/PATCH `/jam-operasional/{id}`
+
+Request:
+
+``` json
+{"hari":"Senin","status_buka":true,"jam_buka":"09:00","jam_tutup":"21:00"}
+```
+
+Response:
+
+``` json
+{"message":"Jam operasional berhasil diperbarui","data":{"id_jam_operasional":1,"hari":"Senin","status_buka":true,"jam_buka":"09:00:00","jam_tutup":"21:00:00"}}
+```
+
+### DELETE `/jam-operasional/{id}`
+
+``` json
+{"message":"Jam operasional berhasil dihapus"}
+```
+
+## 12. Laporan
+
+### GET `/laporan`
+
+Contoh query (nama parameter harus dicocokkan dengan controller):
+
+``` http
+GET /api/laporan?dari=2026-11-01&sampai=2026-11-21
+```
+
+Response:
+
+``` json
+{"pemasukan":2500000,"jumlah_kendaraan":85,"pengeluaran":750000,"laba_bersih":1750000}
+```
+
+### GET `/laporan/harian`
+
+``` json
+{"data":[{"tanggal":"2026-11-20","pemasukan":350000,"jumlah_kendaraan":12,"pengeluaran":50000,"laba_bersih":300000},{"tanggal":"2026-11-21","pemasukan":450000,"jumlah_kendaraan":15,"pengeluaran":75000,"laba_bersih":375000}]}
+```
+
+## 13. Pengelolaan akun kasir
+
+### GET `/kasir`
+
+``` json
+{"data":[{"id_pengguna":2,"nama_lengkap":"Kasir Satu","username":"kasir01","peran":"kasir","status_aktif":true}]}
+```
+
+### POST `/kasir`
+
+Request:
+
+``` json
+{"nama_lengkap":"Kasir Dua","username":"kasir02","password":"KasirAman123!"}
+```
+
+Response:
+
+``` json
+{"message":"Akun kasir berhasil dibuat","data":{"id_pengguna":3,"nama_lengkap":"Kasir Dua","username":"kasir02","peran":"kasir","status_aktif":true}}
+```
+
+### PUT `/kasir/{id}`
+
+Request:
+
+``` json
+{"nama_lengkap":"Kasir Dua Update","username":"kasir02"}
+```
+
+Response:
+
+``` json
+{"message":"Data kasir berhasil diperbarui","data":{"id_pengguna":3,"nama_lengkap":"Kasir Dua Update","username":"kasir02","peran":"kasir","status_aktif":true}}
+```
+
+### PATCH `/kasir/{id}/status`
+
+Request:
+
+``` json
+{"status_aktif":false,"alasan":"Akun tidak lagi digunakan"}
+```
+
+Response:
+
+``` json
+{"message":"Status akun kasir berhasil diperbarui","data":{"id_pengguna":3,"status_aktif":false}}
+```
+
+### PUT `/kasir/{id}/reset-password`
+
+Request:
+
+``` json
+{"password_baru":"PasswordBaru123!","password_baru_confirmation":"PasswordBaru123!"}
+```
+
+Response:
+
+``` json
+{"message":"Password kasir berhasil diatur ulang"}
+```
+
+## 14. Contoh response error
+
+### 401 --- belum login / token tidak valid
+
+``` json
+{"message":"Unauthenticated."}
+```
+
+### 403 --- tidak memiliki hak akses
+
+``` json
+{"message":"Anda tidak memiliki akses"}
+```
+
+### 404 --- data tidak ditemukan
+
+``` json
+{"message":"Data tidak ditemukan"}
+```
+
+### 422 --- validasi gagal
+
+``` json
+{
+  "message":"The username field is required.",
+  "errors":{"username":["The username field is required."]}
+}
+```
+
+### 429 --- terlalu banyak request
+
+``` json
+{"message":"Too Many Attempts."}
+```
+
+## 15. Cara memeriksa response sebenarnya
+
+Jalankan:
+
+``` bash
+php artisan route:list --path=api
+php artisan route:list --path=api -v
+```
+
+Kemudian jalankan server (`php artisan serve`), panggil endpoint melalui
+Postman, dan cocokkan JSON aktual dengan contoh. Source code controller
+adalah acuan utama. Contoh request untuk pesanan, pengeluaran, laporan,
+dan beberapa pesan sukses di atas perlu disesuaikan dengan aturan
+validasi dan return statement pada controller masing-masing.
+
+
 ## 8. Pengujian API
 
 Pengujian dapat dilakukan menggunakan Postman, Insomnia, atau REST
