@@ -740,11 +740,4 @@ Pengembangan yang dapat dilanjutkan:
 5.  Menambahkan dokumentasi OpenAPI/Swagger.
 6.  Menghubungkan endpoint dengan aplikasi React Native.
 
-## 11. Lisensi dan Kontributor
-
-Isi bagian ini sesuai ketentuan proyek, institusi, dan anggota tim
-pengembang.
-
-------------------------------------------------------------------------
-
 **WashNote Backend** --- REST API untuk mendukung operasional usaha
