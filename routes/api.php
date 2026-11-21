@@ -1,23 +1,24 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\HargaLayananController;
+use App\Http\Controllers\Api\JamOperasionalController;
 use App\Http\Controllers\Api\KategoriKendaraanController;
+use App\Http\Controllers\Api\KategoriPengeluaranController;
+use App\Http\Controllers\Api\LaporanController;
 use App\Http\Controllers\Api\LayananController;
+use App\Http\Controllers\Api\PembayaranController;
+use App\Http\Controllers\Api\PengecualianJamOperasionalController;
+use App\Http\Controllers\Api\PengeluaranController;
+use App\Http\Controllers\Api\PenggunaController;
 use App\Http\Controllers\Api\PesananController;
 use App\Http\Controllers\Api\RiwayatPerubahanController;
-use App\Http\Controllers\Api\PembayaranController;
-use App\Http\Controllers\Api\KategoriPengeluaranController;
-use App\Http\Controllers\Api\PengeluaranController;
-use App\Http\Controllers\Api\JamOperasionalController;
-use App\Http\Controllers\Api\LaporanController;
-use App\Http\Controllers\Api\PenggunaController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
-})->middleware('auth:sanctum');
+})->middleware(['auth:sanctum', 'active.user']);
 
 Route::get('/test', function () {
     return response()->json([
@@ -27,17 +28,19 @@ Route::get('/test', function () {
     ]);
 });
 
-// Login: tidak memerlukan token
-Route::post('/login', [AuthController::class, 'login'])
-    ->middleware('throttle:5,1');
+// Login: rate-limit multi-bucket dikelola oleh AuthRateLimitService di AuthController
+Route::post('/login', [AuthController::class, 'login']);
 
-// Route yang memerlukan autentikasi
-Route::middleware('auth:sanctum')->group(function () {
+// Route yang memerlukan autentikasi dan akun aktif
+Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
 
     Route::get('/profile', [AuthController::class, 'profile']);
 
+    Route::put('/profile/password', [AuthController::class, 'changePassword']);
+
+    // Route operasional: Kasir & Owner
     Route::middleware('role:kasir,owner')->group(function () {
         Route::get('/operasional/test', function () {
             return response()->json([
@@ -45,9 +48,46 @@ Route::middleware('auth:sanctum')->group(function () {
                 'message' => 'Akses operasional berhasil.',
             ]);
         });
+
+        Route::get('/pesanan', [PesananController::class, 'index']);
+        Route::post('/pesanan', [PesananController::class, 'store']);
+        Route::get('/pesanan/{pesanan}', [PesananController::class, 'show']);
+        Route::put('/pesanan/{pesanan}', [PesananController::class, 'update']);
+        Route::patch('/pesanan/{pesanan}/metadata', [PesananController::class, 'updateMetadata']);
+        Route::post('/pesanan/{pesanan}/batal', [PesananController::class, 'cancel']);
+
+        Route::put('/kendaraan-pesanan/{id}/status', [
+            PesananController::class,
+            'updateVehicleStatus',
+        ]);
+
+        Route::get('/pesanan/{id}/pembayaran', [
+            PembayaranController::class,
+            'show',
+        ]);
+
+        Route::post('/pesanan/{id}/pembayaran', [
+            PembayaranController::class,
+            'store',
+        ]);
+
+        Route::get('/jam-operasional', [
+            JamOperasionalController::class,
+            'index',
+        ]);
+
+        Route::get('/jam-operasional/status', [
+            JamOperasionalController::class,
+            'status',
+        ]);
+
+        Route::get('/jam-operasional/pengecualian', [
+            PengecualianJamOperasionalController::class,
+            'index',
+        ]);
     });
 
-    // Hanya Owner
+    // Route khusus Owner
     Route::middleware('role:owner')->group(function () {
         Route::get('/owner/test', function () {
             return response()->json([
@@ -55,15 +95,12 @@ Route::middleware('auth:sanctum')->group(function () {
                 'message' => 'Akses khusus Owner berhasil.',
             ]);
         });
-    });
-
-    Route::middleware(['auth:sanctum', 'role:owner'])->group(function () {
 
         Route::apiResource(
             'kategori-kendaraan',
             KategoriKendaraanController::class
         )->parameters([
-            'kategori-kendaraan' => 'kategoriKendaraan'
+            'kategori-kendaraan' => 'kategoriKendaraan',
         ]);
 
         Route::apiResource(
@@ -75,146 +112,102 @@ Route::middleware('auth:sanctum')->group(function () {
             'harga-layanan',
             HargaLayananController::class
         )->parameters([
-            'harga-layanan' => 'hargaLayanan'
+            'harga-layanan' => 'hargaLayanan',
         ]);
-    });
 
-    Route::middleware([
-        'auth:sanctum',
-        'role:kasir,owner'
-    ])->group(function () {
+        Route::get('/riwayat-perubahan', [
+            RiwayatPerubahanController::class,
+            'index',
+        ]);
 
-        Route::get('/pesanan', [PesananController::class, 'index']);
+        Route::apiResource(
+            'kategori-pengeluaran',
+            KategoriPengeluaranController::class
+        );
 
-        Route::post('/pesanan', [PesananController::class, 'store']);
+        Route::get('/pengeluaran', [
+            PengeluaranController::class,
+            'index',
+        ]);
 
-        Route::get('/pesanan/{pesanan}', [PesananController::class, 'show']);
-    });
+        Route::post('/pengeluaran', [
+            PengeluaranController::class,
+            'store',
+        ]);
 
-    Route::get('/riwayat-perubahan', [
-        RiwayatPerubahanController::class,
-        'index'
-    ]);
+        Route::match(['put', 'patch'], '/pengeluaran/{id}', [
+            PengeluaranController::class,
+            'update',
+        ]);
 
-    Route::post('/pesanan/{pesanan}/batal', [
-        PesananController::class,
-        'cancel'
-    ]);
+        Route::match(['post', 'patch'], '/pengeluaran/{id}/batal', [
+            PengeluaranController::class,
+            'cancel',
+        ]);
 
-    // Edit status pesanan
-    Route::put('/pesanan/{pesanan}', [
-        PesananController::class,
-        'update'
-    ]);
+        Route::post('/jam-operasional/pengecualian', [
+            PengecualianJamOperasionalController::class,
+            'store',
+        ]);
 
-    // Update status proses kendaraan
-    Route::put('/kendaraan-pesanan/{id}/status', [
-        PesananController::class,
-        'updateVehicleStatus'
-    ]);
+        Route::match(['put', 'patch'], '/jam-operasional/pengecualian/{id}', [
+            PengecualianJamOperasionalController::class,
+            'update',
+        ])->whereNumber('id');
 
-    // Melihat pembayaran
-    Route::get('/pesanan/{id}/pembayaran', [
-        PembayaranController::class,
-        'show'
-    ]);
-
-    // Mencatat pembayaran
-    Route::post('/pesanan/{id}/pembayaran', [
-        PembayaranController::class,
-        'store'
-    ]);
-
-    // Kategori pengeluaran
-    Route::apiResource(
-        'kategori-pengeluaran',
-        KategoriPengeluaranController::class
-    );
-
-    // Pengeluaran
-    Route::get('/pengeluaran', [
-        PengeluaranController::class,
-        'index'
-    ]);
-
-    Route::post('/pengeluaran', [
-        PengeluaranController::class,
-        'store'
-    ]);
-
-    Route::put('/pengeluaran/{id}', [
-        PengeluaranController::class,
-        'update'
-    ]);
-
-    Route::post('/pengeluaran/{id}/batal', [
-        PengeluaranController::class,
-        'cancel'
-    ]);
-
-    Route::middleware(['auth:sanctum', 'role:owner'])->group(function () {
+        Route::delete('/jam-operasional/pengecualian/{id}', [
+            PengecualianJamOperasionalController::class,
+            'destroy',
+        ])->whereNumber('id');
 
         Route::post('/jam-operasional', [
             JamOperasionalController::class,
-            'store'
+            'store',
         ]);
 
-        Route::put('/jam-operasional/{id}', [
+        Route::match(['put', 'patch'], '/jam-operasional/{id}', [
             JamOperasionalController::class,
-            'update'
-        ]);
+            'update',
+        ])->whereNumber('id');
 
         Route::delete('/jam-operasional/{id}', [
             JamOperasionalController::class,
-            'destroy'
+            'destroy',
+        ])->whereNumber('id');
+
+        Route::get('/laporan', [
+            LaporanController::class,
+            'index',
         ]);
-    });
 
-    Route::middleware([
-        'auth:sanctum',
-        'role:kasir,owner'
-    ])->group(function () {
-
-        Route::get('/jam-operasional', [
-            JamOperasionalController::class,
-            'index'
+        Route::get('/laporan/harian', [
+            LaporanController::class,
+            'daily',
         ]);
+
+        Route::get('/kasir', [
+            PenggunaController::class,
+            'index',
+        ]);
+
+        Route::post('/kasir', [
+            PenggunaController::class,
+            'store',
+        ]);
+
+        Route::put('/kasir/{id}', [
+            PenggunaController::class,
+            'update',
+        ])->whereNumber('id');
+
+        Route::patch('/kasir/{id}/status', [
+            PenggunaController::class,
+            'updateStatus',
+        ])->whereNumber('id');
+
+        Route::put('/kasir/{id}/reset-password', [
+            PenggunaController::class,
+            'resetPassword',
+        ])->whereNumber('id');
     });
-
-    // Laporan keuangan
-    Route::get('/laporan', [
-        LaporanController::class,
-        'index'
-    ]);
-
-    // Laporan harian
-    Route::get('/laporan/harian', [
-        LaporanController::class,
-        'daily'
-    ]);
-
-    Route::get('/kasir', [
-        PenggunaController::class,
-        'index'
-    ]);
-
-    Route::post('/kasir', [
-        PenggunaController::class,
-        'store'
-    ]);
-
-    Route::put('/kasir/{id}', [
-        PenggunaController::class,
-        'update'
-    ]);
-
-    Route::patch('/kasir/{id}/status', [
-        PenggunaController::class,
-        'updateStatus'
-    ]);
-
-    Route::put('/kasir/{id}/reset-password', [
-        PenggunaController::class,
-        'resetPassword'
-    ]);
 });

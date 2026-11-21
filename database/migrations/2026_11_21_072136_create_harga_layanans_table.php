@@ -9,7 +9,6 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-
     public function up(): void
     {
         Schema::create('harga_layanan', function (Blueprint $table) {
@@ -36,7 +35,6 @@ return new class extends Migration
             );
         });
     }
-
 
     /**
      * Reverse the migrations.

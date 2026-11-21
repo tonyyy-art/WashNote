@@ -3,9 +3,17 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class KendaraanPesanan extends Model
 {
+    public const string STATUS_MENUNGGU = 'menunggu';
+
+    public const string STATUS_PROSES = 'proses';
+
+    public const string STATUS_SELESAI = 'selesai';
+
     protected $table = 'kendaraan_pesanan';
 
     protected $primaryKey = 'id_kendaraan_pesanan';
@@ -14,10 +22,11 @@ class KendaraanPesanan extends Model
         'id_pesanan',
         'id_kategori_kendaraan',
         'nama_kategori_snapshot',
+        'plat_nomor',
         'status_proses',
     ];
 
-    public function pesanan()
+    public function pesanan(): BelongsTo
     {
         return $this->belongsTo(
             Pesanan::class,
@@ -26,7 +35,7 @@ class KendaraanPesanan extends Model
         );
     }
 
-    public function kategoriKendaraan()
+    public function kategoriKendaraan(): BelongsTo
     {
         return $this->belongsTo(
             KategoriKendaraan::class,
@@ -35,7 +44,7 @@ class KendaraanPesanan extends Model
         );
     }
 
-    public function detailLayanan()
+    public function detailLayanan(): HasMany
     {
         return $this->hasMany(
             DetailLayanan::class,

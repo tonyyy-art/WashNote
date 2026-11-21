@@ -21,5 +21,4 @@ class DatabaseSeeder extends Seeder
             OwnerSeeder::class,
         ]);
     }
-
 }

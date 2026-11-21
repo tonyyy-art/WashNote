@@ -1,0 +1,372 @@
+<?php
+
+namespace Tests\Feature\Domain;
+
+use App\Models\DetailLayanan;
+use App\Models\HargaLayanan;
+use App\Models\KategoriKendaraan;
+use App\Models\KendaraanPesanan;
+use App\Models\Layanan;
+use App\Models\Pengguna;
+use App\Models\Pesanan;
+use App\Models\RiwayatPerubahan;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+class Phase3OrderLifecycleAndMetadataTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    public function test_order_metadata_nomor_nota_plat_nomor_and_catatan_are_generated_normalized_and_searchable(): void
+    {
+        $kasir = $this->createUser('kasir');
+        $kasirToken = $kasir->createToken('kasir')->plainTextToken;
+
+        [$kategori, , $harga] = $this->seedCatalogTariff('Mobil Kecil', 'Cuci Body', 35000);
+
+        Carbon::setTestNow(Carbon::parse('2026-11-21 10:15:00', 'Asia/Jakarta'));
+
+        $res = $this->withToken($kasirToken)->postJson('/api/pesanan', [
+            'nomor_nota' => 'CLIENT-FAKE-999',
+            'waktu_pesanan' => '1999-01-01T00:00:00Z',
+            'catatan' => '  Jangan semprot area mesin  ',
+            'kendaraan' => [
+                [
+                    'id_kategori_kendaraan' => $kategori->id_kategori_kendaraan,
+                    'plat_nomor' => '  b  1234  gow  ',
+                    'layanan' => [
+                        ['id_harga' => $harga->id_harga],
+                    ],
+                ],
+                [
+                    'id_kategori_kendaraan' => $kategori->id_kategori_kendaraan,
+                    'plat_nomor' => null,
+                    'layanan' => [
+                        ['id_harga' => $harga->id_harga],
+                    ],
+                ],
+            ],
+        ])->assertStatus(201);
+
+        $orderId = $res->json('data.pesanan.id_pesanan');
+        $expectedNota = sprintf('#TRX-20261121-%04d', $orderId);
+
+        $this->assertSame($expectedNota, $res->json('data.pesanan.nomor_nota'));
+        $this->assertSame('Jangan semprot area mesin', $res->json('data.pesanan.catatan'));
+        $this->assertSame(1, $res->json('data.pesanan.version'));
+        $this->assertSame('B 1234 GOW', $res->json('data.pesanan.kendaraan.0.plat_nomor'));
+        $this->assertNull($res->json('data.pesanan.kendaraan.1.plat_nomor'));
+
+        // Overlong trimmed plat_nomor rejected cleanly
+        $this->withToken($kasirToken)->postJson('/api/pesanan', [
+            'kendaraan' => [
+                [
+                    'id_kategori_kendaraan' => $kategori->id_kategori_kendaraan,
+                    'plat_nomor' => 'PLAT_TERLALU_PANJANG_12345',
+                    'layanan' => [
+                        ['id_harga' => $harga->id_harga],
+                    ],
+                ],
+            ],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['kendaraan.0.plat_nomor']);
+
+        // Searchable by partial nomor_nota and case-insensitive plat_nomor
+        $byPlate = $this->withToken($kasirToken)->getJson('/api/pesanan?search=b 1234 gow')->assertStatus(200);
+        $this->assertCount(1, $byPlate->json('data.data'));
+        $this->assertSame($orderId, $byPlate->json('data.data.0.id_pesanan'));
+
+        $byNota = $this->withToken($kasirToken)->getJson('/api/pesanan?search=20261121-')->assertStatus(200);
+        $this->assertSame($orderId, $byNota->json('data.data.0.id_pesanan'));
+    }
+
+    public function test_vehicle_status_updates_atomically_derive_option_b_order_status_and_block_contradictions(): void
+    {
+        $kasir = $this->createUser('kasir');
+        $kasirToken = $kasir->createToken('kasir')->plainTextToken;
+
+        [$kategori, , $harga] = $this->seedCatalogTariff('Motor', 'Cuci Salju', 20000);
+
+        $res = $this->withToken($kasirToken)->postJson('/api/pesanan', [
+            'kendaraan' => [
+                ['id_kategori_kendaraan' => $kategori->id_kategori_kendaraan, 'layanan' => [['id_harga' => $harga->id_harga]]],
+                ['id_kategori_kendaraan' => $kategori->id_kategori_kendaraan, 'layanan' => [['id_harga' => $harga->id_harga]]],
+            ],
+        ])->assertStatus(201);
+
+        $orderId = $res->json('data.pesanan.id_pesanan');
+        $v1Id = $res->json('data.pesanan.kendaraan.0.id_kendaraan_pesanan');
+        $v2Id = $res->json('data.pesanan.kendaraan.1.id_kendaraan_pesanan');
+
+        // Contradictory manual order status 'selesai' rejected while vehicles are still menunggu
+        $this->withToken($kasirToken)->putJson("/api/pesanan/{$orderId}", [
+            'alasan' => 'Paksa selesai padahal belum dicuci',
+            'status_pesanan' => 'selesai',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['status_pesanan']);
+
+        // Vehicle 1 -> proses => order remains berjalan
+        $this->withToken($kasirToken)->putJson("/api/kendaraan-pesanan/{$v1Id}/status", [
+            'status_proses' => 'proses',
+        ])->assertStatus(200)
+            ->assertJsonPath('pesanan_status', 'berjalan');
+
+        // Vehicle 1 -> selesai, Vehicle 2 still menunggu => order remains berjalan
+        $this->withToken($kasirToken)->putJson("/api/kendaraan-pesanan/{$v1Id}/status", [
+            'status_proses' => 'selesai',
+        ])->assertStatus(200)
+            ->assertJsonPath('pesanan_status', 'berjalan');
+
+        // Vehicle 2 -> selesai => ALL vehicles selesai => order atomically becomes selesai
+        $this->withToken($kasirToken)->putJson("/api/kendaraan-pesanan/{$v2Id}/status", [
+            'status_proses' => 'selesai',
+        ])->assertStatus(200)
+            ->assertJsonPath('pesanan_status', 'selesai');
+
+        $this->assertSame('selesai', Pesanan::query()->findOrFail($orderId)->status_pesanan);
+
+        // Contradictory manual order status 'berjalan' rejected when all vehicles are selesai
+        $this->withToken($kasirToken)->putJson("/api/pesanan/{$orderId}", [
+            'alasan' => 'Turunkan status manual bertentangan dengan kendaraan',
+            'status_pesanan' => 'berjalan',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['status_pesanan']);
+
+        // Concurrent-style sequential transaction step with stale expected_version returns 409
+        $currentVersion = Pesanan::query()->findOrFail($orderId)->version;
+        $this->withToken($kasirToken)->putJson("/api/kendaraan-pesanan/{$v2Id}/status", [
+            'status_proses' => 'proses',
+            'expected_version' => $currentVersion - 1,
+        ])->assertStatus(409)
+            ->assertJsonPath('error_code', 'VERSION_CONFLICT');
+
+        // Revert Vehicle 2 -> proses using fresh version => order atomically returns to berjalan
+        $this->withToken($kasirToken)->putJson("/api/kendaraan-pesanan/{$v2Id}/status", [
+            'status_proses' => 'proses',
+            'expected_version' => $currentVersion,
+        ])->assertStatus(200)
+            ->assertJsonPath('pesanan_status', 'berjalan');
+
+        // Concurrent vehicle updates inside explicit transactions derive consistent final order status
+        DB::transaction(function () use ($v1Id, $v2Id): void {
+            KendaraanPesanan::query()->where('id_kendaraan_pesanan', $v1Id)->update(['status_proses' => 'selesai']);
+            KendaraanPesanan::query()->where('id_kendaraan_pesanan', $v2Id)->update(['status_proses' => 'selesai']);
+        });
+
+        $this->withToken($kasirToken)->putJson("/api/kendaraan-pesanan/{$v1Id}/status", [
+            'status_proses' => 'selesai',
+        ])->assertStatus(200)
+            ->assertJsonPath('pesanan_status', 'selesai');
+
+        // Cancelled order rejects vehicle status changes
+        $this->withToken($kasirToken)->postJson("/api/pesanan/{$orderId}/batal", [
+            'alasan_pembatalan' => 'Pelanggan membatalkan transaksi',
+        ])->assertStatus(200);
+
+        $this->withToken($kasirToken)->putJson("/api/kendaraan-pesanan/{$v1Id}/status", [
+            'status_proses' => 'proses',
+        ])->assertStatus(422);
+    }
+
+    public function test_pre_payment_order_edit_recalculates_totals_checks_version_and_locks_after_payment_while_allowing_fr33_metadata(): void
+    {
+        $kasir = $this->createUser('kasir');
+        $owner = $this->createUser('owner');
+        $kasirToken = $kasir->createToken('kasir')->plainTextToken;
+        $ownerToken = $owner->createToken('owner')->plainTextToken;
+
+        [$kategoriMobil, , $hargaUtama] = $this->seedCatalogTariff('SUV', 'Cuci Premium', 50000, 'utama');
+        [, , $hargaAddOn] = $this->seedCatalogTariff('SUV', 'Vacuum Interior', 20000, 'tambahan', $kategoriMobil);
+
+        $created = $this->withToken($kasirToken)->postJson('/api/pesanan', [
+            'catatan' => 'Catatan awal',
+            'kendaraan' => [
+                [
+                    'id_kategori_kendaraan' => $kategoriMobil->id_kategori_kendaraan,
+                    'plat_nomor' => 'B 1111 AAA',
+                    'layanan' => [
+                        ['id_harga' => $hargaUtama->id_harga],
+                    ],
+                ],
+            ],
+        ])->assertStatus(201)
+            ->assertJsonPath('data.total_harga', 50000);
+
+        $orderId = $created->json('data.pesanan.id_pesanan');
+        $vehicleId = $created->json('data.pesanan.kendaraan.0.id_kendaraan_pesanan');
+
+        // Advance vehicle to 'selesai' so order derives 'selesai'
+        $this->withToken($kasirToken)->putJson("/api/kendaraan-pesanan/{$vehicleId}/status", [
+            'status_proses' => 'selesai',
+        ])->assertStatus(200);
+
+        $staleVersion = $created->json('data.pesanan.version'); // 1 (now DB is 2)
+
+        // Stale expected_version rejected with 409
+        $this->withToken($kasirToken)->putJson("/api/pesanan/{$orderId}", [
+            'expected_version' => $staleVersion,
+            'alasan' => 'Tambah layanan tambahan vacuum',
+            'kendaraan' => [
+                [
+                    'id_kendaraan_pesanan' => $vehicleId,
+                    'id_kategori_kendaraan' => $kategoriMobil->id_kategori_kendaraan,
+                    'layanan' => [
+                        ['id_harga' => $hargaUtama->id_harga],
+                        ['id_harga' => $hargaAddOn->id_harga],
+                    ],
+                ],
+            ],
+        ])->assertStatus(409)
+            ->assertJsonPath('error_code', 'VERSION_CONFLICT');
+
+        // Legacy caller omitting expected_version can update pre-payment vehicles/services & preserves existing vehicle status
+        $updated = $this->withToken($kasirToken)->putJson("/api/pesanan/{$orderId}", [
+            'alasan' => 'Pelanggan tambah layanan vacuum dan tambah motor kedua',
+            'catatan' => 'Catatan revisi pra-bayar',
+            'kendaraan' => [
+                [
+                    'id_kendaraan_pesanan' => $vehicleId,
+                    'id_kategori_kendaraan' => $kategoriMobil->id_kategori_kendaraan,
+                    'plat_nomor' => 'B 1111 AAA',
+                    'layanan' => [
+                        ['id_harga' => $hargaUtama->id_harga],
+                        ['id_harga' => $hargaAddOn->id_harga, 'harga_akhir' => 18000, 'alasan_penyesuaian' => 'Promo bundling'],
+                    ],
+                ],
+                [
+                    'id_kategori_kendaraan' => $kategoriMobil->id_kategori_kendaraan,
+                    'plat_nomor' => 'd 2222 bbb',
+                    'layanan' => [
+                        ['id_harga' => $hargaUtama->id_harga],
+                    ],
+                ],
+            ],
+        ])->assertStatus(200)
+            ->assertJsonPath('subtotal_utama', 100000)
+            ->assertJsonPath('subtotal_tambahan', 18000)
+            ->assertJsonPath('total_harga', 118000)
+            ->assertJsonPath('data.status_pesanan', 'berjalan')
+            ->assertJsonPath('data.catatan', 'Catatan revisi pra-bayar');
+
+        // Original vehicle kept 'selesai', added vehicle initialized to 'menunggu' -> order re-derived to 'berjalan'
+        $this->assertSame('selesai', $updated->json('data.kendaraan.0.status_proses'));
+        $this->assertSame('menunggu', $updated->json('data.kendaraan.1.status_proses'));
+        $this->assertSame('D 2222 BBB', $updated->json('data.kendaraan.1.plat_nomor'));
+
+        // Pay order in full (118.000)
+        $this->withToken($kasirToken)->postJson("/api/pesanan/{$orderId}/pembayaran", [
+            'jumlah_dibayar' => 118000,
+            'metode_pembayaran' => 'transfer',
+        ])->assertStatus(200);
+
+        // Post-payment service/price edit via PUT /api/pesanan/{id} blocked (409 ORDER_LOCKED_BY_PAYMENT) for BOTH Kasir and Owner
+        $this->withToken($kasirToken)->putJson("/api/pesanan/{$orderId}", [
+            'alasan' => 'Coba ubah harga setelah dibayar',
+            'kendaraan' => [
+                [
+                    'id_kendaraan_pesanan' => $vehicleId,
+                    'id_kategori_kendaraan' => $kategoriMobil->id_kategori_kendaraan,
+                    'layanan' => [['id_harga' => $hargaUtama->id_harga]],
+                ],
+            ],
+        ])->assertStatus(409)
+            ->assertJsonPath('error_code', 'ORDER_LOCKED_BY_PAYMENT');
+
+        $this->app['auth']->forgetGuards();
+        $this->withToken($ownerToken)->putJson("/api/pesanan/{$orderId}", [
+            'alasan' => 'Owner coba edit lewat endpoint pra-bayar',
+        ])->assertStatus(409)
+            ->assertJsonPath('error_code', 'ORDER_LOCKED_BY_PAYMENT');
+
+        // FR-33: Kasir and Owner CAN update plat_nomor and catatan post-payment via PATCH /metadata with audit
+        $this->app['auth']->forgetGuards();
+        $secondVehicleId = $updated->json('data.kendaraan.1.id_kendaraan_pesanan');
+        $currentVersion = $updated->json('data.version');
+
+        // Rejected if attempting to pass financial/service field on /metadata
+        $this->withToken($kasirToken)->patchJson("/api/pesanan/{$orderId}/metadata", [
+            'alasan' => 'Coba sisipkan harga_akhir',
+            'catatan' => 'Catatan baru',
+            'harga_akhir' => 1000,
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['harga_akhir']);
+
+        $metaRes = $this->withToken($kasirToken)->patchJson("/api/pesanan/{$orderId}/metadata", [
+            'expected_version' => $currentVersion,
+            'alasan' => 'Koreksi salah ketik plat nomor kendaraan kedua',
+            'catatan' => 'Catatan pasca bayar diperbarui',
+            'kendaraan' => [
+                ['id_kendaraan_pesanan' => $secondVehicleId, 'plat_nomor' => 'D 9999 ZZZ'],
+            ],
+        ])->assertStatus(200)
+            ->assertJsonPath('data.catatan', 'Catatan pasca bayar diperbarui')
+            ->assertJsonPath('total_harga', 118000);
+
+        $this->assertSame('D 9999 ZZZ', $metaRes->json('data.kendaraan.1.plat_nomor'));
+        $this->assertSame($currentVersion + 1, $metaRes->json('data.version'));
+
+        // Verify payment & detail_layanan count untouched and audit trail recorded
+        $this->assertSame(3, DetailLayanan::query()->count());
+        $audit = RiwayatPerubahan::query()
+            ->where('entitas', 'pesanan')
+            ->where('record_id', $orderId)
+            ->latest('id_riwayat')
+            ->firstOrFail();
+
+        $this->assertSame('METADATA_UPDATE', $audit->nilai_sesudah['aksi']);
+        $this->assertSame('Koreksi salah ketik plat nomor kendaraan kedua', $audit->alasan);
+    }
+
+    private function createUser(string $role): Pengguna
+    {
+        return Pengguna::query()->create([
+            'nama_lengkap' => ucfirst($role).' Lifecycle',
+            'username' => $role.'_lc_'.uniqid(),
+            'kata_sandi_hash' => 'Password123!',
+            'peran' => $role,
+            'status_aktif' => true,
+        ]);
+    }
+
+    /**
+     * @return array{0: KategoriKendaraan, 1: Layanan, 2: HargaLayanan}
+     */
+    private function seedCatalogTariff(
+        string $namaKategori,
+        string $namaLayanan,
+        int $hargaDasar,
+        string $tipe = 'utama',
+        ?KategoriKendaraan $kategoriOverride = null,
+    ): array {
+        $kategori = $kategoriOverride ?? KategoriKendaraan::query()->create([
+            'jenis_kendaraan' => 'mobil',
+            'nama_kategori' => $namaKategori.' '.uniqid(),
+            'status_aktif' => true,
+        ]);
+
+        $layanan = Layanan::query()->create([
+            'nama_layanan' => $namaLayanan.' '.uniqid(),
+            'tipe_layanan' => $tipe,
+            'status_aktif' => true,
+        ]);
+
+        $harga = HargaLayanan::query()->create([
+            'id_layanan' => $layanan->id_layanan,
+            'id_kategori_kendaraan' => $kategori->id_kategori_kendaraan,
+            'harga_dasar' => $hargaDasar,
+            'batas_bawah' => max(0, $hargaDasar - 5000),
+            'batas_atas' => $hargaDasar + 15000,
+            'status_aktif' => true,
+        ]);
+
+        return [$kategori, $layanan, $harga];
+    }
+}
