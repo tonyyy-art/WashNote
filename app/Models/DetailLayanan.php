@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DetailLayanan extends Model
 {
@@ -13,6 +14,8 @@ class DetailLayanan extends Model
     protected $fillable = [
         'id_kendaraan_pesanan',
         'id_harga',
+        'nama_layanan_snapshot',
+        'tipe_layanan_snapshot',
         'harga_dasar_snapshot',
         'harga_akhir',
         'alasan_penyesuaian',
@@ -26,7 +29,7 @@ class DetailLayanan extends Model
         ];
     }
 
-    public function kendaraanPesanan()
+    public function kendaraanPesanan(): BelongsTo
     {
         return $this->belongsTo(
             KendaraanPesanan::class,
@@ -35,7 +38,7 @@ class DetailLayanan extends Model
         );
     }
 
-    public function hargaLayanan()
+    public function hargaLayanan(): BelongsTo
     {
         return $this->belongsTo(
             HargaLayanan::class,

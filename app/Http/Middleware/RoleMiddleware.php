@@ -15,16 +15,22 @@ class RoleMiddleware
     ): Response {
         $pengguna = $request->user();
 
-        // Pastikan pengguna sudah login
-        if (!$pengguna) {
+        if (! $pengguna) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthenticated.',
             ], 401);
         }
 
-        // Periksa apakah role diizinkan
-        if (!in_array($pengguna->peran, $roles, true)) {
+        if (! $pengguna->status_aktif) {
+            return response()->json([
+                'success' => false,
+                'error_code' => 'USER_INACTIVE',
+                'message' => 'Akun Anda tidak aktif. Silakan hubungi Owner.',
+            ], 401);
+        }
+
+        if (! in_array($pengguna->peran, $roles, true)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Anda tidak memiliki hak akses.',

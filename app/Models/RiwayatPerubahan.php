@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use LogicException;
 
 class RiwayatPerubahan extends Model
 {
@@ -26,7 +28,18 @@ class RiwayatPerubahan extends Model
         'nilai_sesudah' => 'array',
     ];
 
-    public function pengguna()
+    protected static function booted(): void
+    {
+        static::updating(static function (): bool {
+            throw new LogicException('riwayat_perubahan bersifat append-only dan tidak dapat diubah.');
+        });
+
+        static::deleting(static function (): bool {
+            throw new LogicException('riwayat_perubahan bersifat append-only dan tidak dapat dihapus.');
+        });
+    }
+
+    public function pengguna(): BelongsTo
     {
         return $this->belongsTo(Pengguna::class, 'id_pengguna', 'id_pengguna');
     }
