@@ -25,9 +25,6 @@ export function mountOrderDetailView(container, orderId) {
     let editCatatan = '';
     let editAlasan = '';
     let editVehicles = [];
-    let metadataAlasan = '';
-    let metadataCatatan = '';
-    let metadataPlates = {};
     let cancelReason = '';
 
     async function loadOrder() {
@@ -59,23 +56,17 @@ export function mountOrderDetailView(container, orderId) {
         }
 
         editCatatan = order.catatan || '';
-        metadataCatatan = order.catatan || '';
-        metadataPlates = {};
 
-        editVehicles = (order.kendaraan || []).map((v) => {
-            metadataPlates[v.id_kendaraan_pesanan] = v.plat_nomor || '';
-
-            return {
-                id_kendaraan_pesanan: Number(v.id_kendaraan_pesanan),
-                id_kategori_kendaraan: Number(v.id_kategori_kendaraan),
-                plat_nomor: v.plat_nomor || '',
-                layanan: (v.detail_layanan || []).map((d) => ({
-                    id_harga: Number(d.id_harga),
-                    harga_akhir: Number(d.harga_akhir),
-                    alasan_penyesuaian: d.alasan_penyesuaian || '',
-                })),
-            };
-        });
+        editVehicles = (order.kendaraan || []).map((v) => ({
+            id_kendaraan_pesanan: Number(v.id_kendaraan_pesanan),
+            id_kategori_kendaraan: Number(v.id_kategori_kendaraan),
+            plat_nomor: v.plat_nomor || '',
+            layanan: (v.detail_layanan || []).map((d) => ({
+                id_harga: Number(d.id_harga),
+                harga_akhir: Number(d.harga_akhir),
+                alasan_penyesuaian: d.alasan_penyesuaian || '',
+            })),
+        }));
     }
 
     function tariffsForCategory(kategoriId) {
@@ -129,7 +120,7 @@ export function mountOrderDetailView(container, orderId) {
         }
     }
 
-    async function handlePrePaymentEditSubmit() {
+    async function handleOrderEditSubmit() {
         if (isSubmitting || !order) {
             return;
         }
@@ -171,58 +162,6 @@ export function mountOrderDetailView(container, orderId) {
             const res = await washnoteApi.updateOrder(order.id_pesanan, payload);
             editAlasan = '';
             showToast(res?.message || 'Pesanan berhasil diperbarui.', 'success');
-            activeTab = 'detail';
-            await loadOrder();
-        } catch (err) {
-            if (err.status === 409 && err.errorCode === 'VERSION_CONFLICT') {
-                showToast('Pesanan berubah karena pembaruan lain. Data terbaru dimuat ulang.', 'info');
-                await loadOrder();
-                return;
-            }
-            errorObj = err;
-        } finally {
-            isSubmitting = false;
-            render();
-        }
-    }
-
-    async function handleMetadataSubmit() {
-        if (isSubmitting || !order) {
-            return;
-        }
-
-        const catInput = container.querySelector('#meta-catatan');
-        const reasonInput = container.querySelector('#meta-alasan');
-        if (catInput) {
-            metadataCatatan = catInput.value;
-        }
-        if (reasonInput) {
-            metadataAlasan = reasonInput.value;
-        }
-
-        (order.kendaraan || []).forEach((v) => {
-            const platEl = container.querySelector(`[data-meta-plat="${v.id_kendaraan_pesanan}"]`);
-            if (platEl) {
-                metadataPlates[v.id_kendaraan_pesanan] = platEl.value;
-            }
-        });
-
-        isSubmitting = true;
-        errorObj = null;
-        render();
-
-        try {
-            const res = await washnoteApi.updateOrderMetadata(order.id_pesanan, {
-                expected_version: order.version,
-                alasan: metadataAlasan.trim(),
-                catatan: metadataCatatan.trim() !== '' ? metadataCatatan.trim() : null,
-                kendaraan: (order.kendaraan || []).map((v) => ({
-                    id_kendaraan_pesanan: Number(v.id_kendaraan_pesanan),
-                    plat_nomor: (metadataPlates[v.id_kendaraan_pesanan] || '').trim() || null,
-                })),
-            });
-            metadataAlasan = '';
-            showToast(res?.message || 'Metadata pesanan diperbarui.', 'success');
             activeTab = 'detail';
             await loadOrder();
         } catch (err) {
@@ -389,7 +328,7 @@ export function mountOrderDetailView(container, orderId) {
                 <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
                     ${[
                         ['detail', 'Status & Rincian'],
-                        ['edit', isPaid ? 'Edit Metadata & Status (Sudah Dibayar)' : 'Edit Pesanan'],
+                        ['edit', 'Edit Pesanan'],
                         ['payment', 'Pembayaran'],
                         ['cancel', 'Batalkan Pesanan'],
                     ].map(([tabId, label]) => `
@@ -503,55 +442,18 @@ export function mountOrderDetailView(container, orderId) {
             return '<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800">Pesanan yang telah dibatalkan tidak dapat diedit.</div>';
         }
 
-        if (isPaid) {
-            return `
-                <div class="space-y-4">
-                    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
-                        <p class="font-bold">Pesanan Sudah Dibayar — Mode Edit Metadata & Status</p>
-                        <p class="mt-1">Anda tetap dapat mengubah <strong>plat nomor</strong> dan <strong>catatan pesanan</strong> dengan alasan audit (serta memperbarui status cucian tiap kendaraan di tab Status & Rincian). Perubahan rincian layanan atau nominal harga setelah pembayaran dikunci oleh kebijakan backend untuk menjaga akurasi kas.</p>
-                    </div>
-
-                    <form id="metadata-edit-form" class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <h3 class="text-base font-bold text-slate-900">Perbarui Plat Nomor & Catatan</h3>
-                        <div class="grid gap-3 sm:grid-cols-2">
-                            ${(order.kendaraan || []).map((v, idx) => `
-                                <div>
-                                    <label class="mb-1 block text-xs font-semibold text-slate-700">Plat Nomor Kendaraan #${idx + 1} (${escapeHtml(v.nama_kategori_snapshot)})</label>
-                                    <input
-                                        type="text"
-                                        maxlength="20"
-                                        data-meta-plat="${v.id_kendaraan_pesanan}"
-                                        value="${escapeHtml(metadataPlates[v.id_kendaraan_pesanan] ?? '')}"
-                                        placeholder="Opsional"
-                                        class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm uppercase focus:border-teal-600 focus:outline-none"
-                                    />
-                                </div>
-                            `).join('')}
-                        </div>
-
-                        <div>
-                            <label for="meta-catatan" class="mb-1 block text-xs font-semibold text-slate-700">Catatan Pesanan</label>
-                            <textarea id="meta-catatan" rows="2" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none">${escapeHtml(metadataCatatan)}</textarea>
-                        </div>
-
-                        <div>
-                            <label for="meta-alasan" class="mb-1 block text-xs font-semibold text-slate-700">Alasan Perubahan (Wajib untuk Audit, min. 5 karakter)</label>
-                            <input id="meta-alasan" type="text" required minlength="5" value="${escapeHtml(metadataAlasan)}" placeholder="Contoh: Koreksi typo huruf akhir plat nomor" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
-                        </div>
-
-                        <button type="submit" ${isSubmitting ? 'disabled' : ''} class="rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
-                            ${isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan Metadata'}
-                        </button>
-                    </form>
-                </div>
-            `;
-        }
-
         return `
-            <form id="prepay-edit-form" class="space-y-4">
+            <form id="order-edit-form" class="space-y-4">
+                ${isPaid ? `
+                    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+                        <p class="font-bold">Pesanan Sudah Dibayar — Edit Penuh Tetap Diizinkan</p>
+                        <p class="mt-1">Anda dapat mengubah kendaraan, layanan, harga akhir, plat nomor, maupun catatan beserta alasan audit wajib. Catatan transaksi pembayaran yang sudah tercatat dan laporan keuangan omzet tetap dijaga utuh.</p>
+                    </div>
+                ` : ''}
+
                 <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-base font-bold text-slate-900">Edit Kendaraan, Layanan & Harga (Pra-Bayar)</h3>
+                        <h3 class="text-base font-bold text-slate-900">Edit Kendaraan, Layanan & Harga</h3>
                         <button type="button" id="edit-add-veh-btn" class="rounded-xl border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-100">+ Tambah Kendaraan</button>
                     </div>
 
@@ -626,7 +528,7 @@ export function mountOrderDetailView(container, orderId) {
                         </div>
                         <div>
                             <label for="edit-order-alasan" class="mb-1 block text-xs font-semibold text-slate-700">Alasan Edit Pesanan (Wajib, min. 5 karakter)</label>
-                            <input id="edit-order-alasan" type="text" required minlength="5" value="${escapeHtml(editAlasan)}" placeholder="Contoh: Pelanggan menambah layanan semir ban sebelum bayar" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                            <input id="edit-order-alasan" type="text" required minlength="5" value="${escapeHtml(editAlasan)}" placeholder="Contoh: Pelanggan menambah layanan semir ban atau koreksi harga" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
                         </div>
                         <button type="submit" ${isSubmitting ? 'disabled' : ''} class="rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60">
                             ${isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan Pesanan'}
@@ -731,14 +633,9 @@ export function mountOrderDetailView(container, orderId) {
             });
         });
 
-        container.querySelector('#metadata-edit-form')?.addEventListener('submit', (e) => {
+        container.querySelector('#order-edit-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
-            handleMetadataSubmit();
-        });
-
-        container.querySelector('#prepay-edit-form')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            handlePrePaymentEditSubmit();
+            handleOrderEditSubmit();
         });
 
         container.querySelector('#edit-add-veh-btn')?.addEventListener('click', () => {

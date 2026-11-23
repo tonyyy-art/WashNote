@@ -424,7 +424,7 @@ class PesananController extends Controller
     }
 
     /**
-     * Edit an unpaid, non-cancelled order transactionally while locking paid orders and guarding derived status.
+     * Edit a non-cancelled order (unpaid or paid) transactionally while enforcing audit reason, version concurrency, and derived Option B status.
      */
     public function update(Request $request, Pesanan $pesanan): JsonResponse
     {
@@ -462,23 +462,10 @@ class PesananController extends Controller
                 ];
             }
 
-            /** @var Pembayaran|null $pembayaran */
-            $pembayaran = Pembayaran::query()
+            Pembayaran::query()
                 ->where('id_pesanan', $locked->id_pesanan)
                 ->lockForUpdate()
                 ->first();
-
-            if ($pembayaran !== null && $pembayaran->status_pembayaran === 'sudah_dibayar') {
-                return [
-                    'error' => true,
-                    'status' => 409,
-                    'payload' => [
-                        'success' => false,
-                        'error_code' => 'ORDER_LOCKED_BY_PAYMENT',
-                        'message' => 'Pesanan yang sudah dibayar tidak dapat diubah layanan atau harganya.',
-                    ],
-                ];
-            }
 
             if (
                 array_key_exists('expected_version', $validated)
@@ -895,7 +882,7 @@ class PesananController extends Controller
     }
 
     /**
-     * Apply pre-payment edits to vehicles and service lines while preserving active vehicle statuses.
+     * Apply order edits to vehicles and service lines while preserving active vehicle statuses.
      *
      * @param  Collection<int, KendaraanPesanan>  $existingVehicles
      * @param  array<int, array<string, mixed>>  $incomingVehicles

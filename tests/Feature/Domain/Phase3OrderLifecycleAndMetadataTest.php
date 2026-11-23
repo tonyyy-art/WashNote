@@ -176,7 +176,7 @@ class Phase3OrderLifecycleAndMetadataTest extends TestCase
         ])->assertStatus(422);
     }
 
-    public function test_pre_payment_order_edit_recalculates_totals_checks_version_and_locks_after_payment_while_allowing_fr33_metadata(): void
+    public function test_order_edit_works_before_and_after_payment_with_version_audit_and_preserves_settled_payment_and_reports(): void
     {
         $kasir = $this->createUser('kasir');
         $owner = $this->createUser('owner');
@@ -185,6 +185,8 @@ class Phase3OrderLifecycleAndMetadataTest extends TestCase
 
         [$kategoriMobil, , $hargaUtama] = $this->seedCatalogTariff('SUV', 'Cuci Premium', 50000, 'utama');
         [, , $hargaAddOn] = $this->seedCatalogTariff('SUV', 'Vacuum Interior', 20000, 'tambahan', $kategoriMobil);
+
+        Carbon::setTestNow(Carbon::parse('2026-11-21 10:00:00', 'Asia/Jakarta'));
 
         $created = $this->withToken($kasirToken)->postJson('/api/pesanan', [
             'catatan' => 'Catatan awal',
@@ -261,35 +263,120 @@ class Phase3OrderLifecycleAndMetadataTest extends TestCase
         $this->assertSame('menunggu', $updated->json('data.kendaraan.1.status_proses'));
         $this->assertSame('D 2222 BBB', $updated->json('data.kendaraan.1.plat_nomor'));
 
-        // Pay order in full (118.000)
+        // Pay order in full via cash (118.000 invoiced, 150.000 tendered -> 32.000 change)
         $this->withToken($kasirToken)->postJson("/api/pesanan/{$orderId}/pembayaran", [
-            'jumlah_dibayar' => 118000,
-            'metode_pembayaran' => 'transfer',
-        ])->assertStatus(200);
+            'jumlah_dibayar' => 150000,
+            'metode_pembayaran' => 'tunai',
+        ])->assertStatus(200)
+            ->assertJsonPath('total_pesanan', 118000)
+            ->assertJsonPath('uang_diterima', 150000)
+            ->assertJsonPath('kembalian', 32000);
 
-        // Post-payment service/price edit via PUT /api/pesanan/{id} blocked (409 ORDER_LOCKED_BY_PAYMENT) for BOTH Kasir and Owner
-        $this->withToken($kasirToken)->putJson("/api/pesanan/{$orderId}", [
-            'alasan' => 'Coba ubah harga setelah dibayar',
+        $secondVehicleId = $updated->json('data.kendaraan.1.id_kendaraan_pesanan');
+        $paidVersion = $updated->json('data.version');
+
+        // Paid order service & price edit via PUT /api/pesanan/{id} succeeds for Kasir (with expected_version check & audit)
+        $paidEditKasir = $this->withToken($kasirToken)->putJson("/api/pesanan/{$orderId}", [
+            'expected_version' => $paidVersion,
+            'alasan' => 'Koreksi harga dan tambah layanan vacuum pada kendaraan kedua setelah bayar',
+            'catatan' => 'Catatan revisi pasca-bayar kasir',
             'kendaraan' => [
                 [
                     'id_kendaraan_pesanan' => $vehicleId,
                     'id_kategori_kendaraan' => $kategoriMobil->id_kategori_kendaraan,
-                    'layanan' => [['id_harga' => $hargaUtama->id_harga]],
+                    'plat_nomor' => 'B 1111 AAA',
+                    'layanan' => [
+                        ['id_harga' => $hargaUtama->id_harga],
+                        ['id_harga' => $hargaAddOn->id_harga, 'harga_akhir' => 18000, 'alasan_penyesuaian' => 'Promo bundling'],
+                    ],
+                ],
+                [
+                    'id_kendaraan_pesanan' => $secondVehicleId,
+                    'id_kategori_kendaraan' => $kategoriMobil->id_kategori_kendaraan,
+                    'plat_nomor' => 'D 2222 BBB',
+                    'layanan' => [
+                        ['id_harga' => $hargaUtama->id_harga, 'harga_akhir' => 55000, 'alasan_penyesuaian' => 'Penambahan perlakuan noda aspal'],
+                        ['id_harga' => $hargaAddOn->id_harga],
+                    ],
                 ],
             ],
+        ])->assertStatus(200)
+            ->assertJsonPath('subtotal_utama', 105000)
+            ->assertJsonPath('subtotal_tambahan', 38000)
+            ->assertJsonPath('total_harga', 143000)
+            ->assertJsonPath('data.status_pesanan', 'berjalan')
+            ->assertJsonPath('data.catatan', 'Catatan revisi pasca-bayar kasir');
+
+        // Optimistic lock still protects post-payment edits when stale expected_version is sent
+        $this->withToken($kasirToken)->putJson("/api/pesanan/{$orderId}", [
+            'expected_version' => $paidVersion,
+            'alasan' => 'Percobaan edit memakai version lama',
         ])->assertStatus(409)
-            ->assertJsonPath('error_code', 'ORDER_LOCKED_BY_PAYMENT');
+            ->assertJsonPath('error_code', 'VERSION_CONFLICT');
+
+        // Option B still rejects manual status_pesanan contradicting vehicle statuses on paid orders
+        $this->withToken($kasirToken)->putJson("/api/pesanan/{$orderId}", [
+            'expected_version' => $paidEditKasir->json('data.version'),
+            'alasan' => 'Coba paksa status selesai manual',
+            'status_pesanan' => 'selesai',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['status_pesanan']);
+
+        // Owner can also edit paid order services/prices cleanly
+        $this->app['auth']->forgetGuards();
+        $paidEditOwner = $this->withToken($ownerToken)->putJson("/api/pesanan/{$orderId}", [
+            'expected_version' => $paidEditKasir->json('data.version'),
+            'alasan' => 'Penyesuaian diskon owner pasca bayar',
+            'kendaraan' => [
+                [
+                    'id_kendaraan_pesanan' => $vehicleId,
+                    'id_kategori_kendaraan' => $kategoriMobil->id_kategori_kendaraan,
+                    'plat_nomor' => 'B 1111 AAA',
+                    'layanan' => [
+                        ['id_harga' => $hargaUtama->id_harga],
+                        ['id_harga' => $hargaAddOn->id_harga, 'harga_akhir' => 15000, 'alasan_penyesuaian' => 'Diskon owner'],
+                    ],
+                ],
+                [
+                    'id_kendaraan_pesanan' => $secondVehicleId,
+                    'id_kategori_kendaraan' => $kategoriMobil->id_kategori_kendaraan,
+                    'plat_nomor' => 'D 2222 BBB',
+                    'layanan' => [
+                        ['id_harga' => $hargaUtama->id_harga, 'harga_akhir' => 55000, 'alasan_penyesuaian' => 'Penambahan perlakuan noda aspal'],
+                        ['id_harga' => $hargaAddOn->id_harga],
+                    ],
+                ],
+            ],
+        ])->assertStatus(200)
+            ->assertJsonPath('total_harga', 140000);
+
+        // Payment record, cash change, and settled financial reports remain completely intact (not corrupted)
+        $paymentShow = $this->withToken($kasirToken)->getJson("/api/pesanan/{$orderId}/pembayaran")
+            ->assertStatus(200);
+        $this->assertSame('sudah_dibayar', $paymentShow->json('data.status_pembayaran'));
+        $this->assertSame('tunai', $paymentShow->json('data.metode_pembayaran'));
+        $this->assertEquals(118000.0, (float) $paymentShow->json('data.jumlah_dibayar'));
+        $this->assertEquals(150000.0, (float) $paymentShow->json('data.uang_diterima'));
+        $this->assertEquals(32000.0, (float) $paymentShow->json('data.kembalian'));
+
+        // Duplicate settlement attempt remains blocked
+        $this->withToken($kasirToken)->postJson("/api/pesanan/{$orderId}/pembayaran", [
+            'jumlah_dibayar' => 140000,
+            'metode_pembayaran' => 'tunai',
+        ])->assertStatus(422);
 
         $this->app['auth']->forgetGuards();
-        $this->withToken($ownerToken)->putJson("/api/pesanan/{$orderId}", [
-            'alasan' => 'Owner coba edit lewat endpoint pra-bayar',
-        ])->assertStatus(409)
-            ->assertJsonPath('error_code', 'ORDER_LOCKED_BY_PAYMENT');
+        $this->withToken($ownerToken)->getJson('/api/laporan?tanggal_mulai=2026-11-21&tanggal_akhir=2026-11-21')
+            ->assertStatus(200)
+            ->assertJsonPath('data.total_pendapatan', 118000);
 
-        // FR-33: Kasir and Owner CAN update plat_nomor and catatan post-payment via PATCH /metadata with audit
+        $this->withToken($ownerToken)->getJson('/api/laporan/harian?tanggal_mulai=2026-11-21&tanggal_akhir=2026-11-21')
+            ->assertStatus(200)
+            ->assertJsonPath('data.0.pendapatan', 118000);
+
+        // FR-33: Kasir and Owner also remain able to update plat_nomor and catatan post-payment via PATCH /metadata with audit
         $this->app['auth']->forgetGuards();
-        $secondVehicleId = $updated->json('data.kendaraan.1.id_kendaraan_pesanan');
-        $currentVersion = $updated->json('data.version');
+        $currentVersion = $paidEditOwner->json('data.version');
 
         // Rejected if attempting to pass financial/service field on /metadata
         $this->withToken($kasirToken)->patchJson("/api/pesanan/{$orderId}/metadata", [
@@ -308,21 +395,32 @@ class Phase3OrderLifecycleAndMetadataTest extends TestCase
             ],
         ])->assertStatus(200)
             ->assertJsonPath('data.catatan', 'Catatan pasca bayar diperbarui')
-            ->assertJsonPath('total_harga', 118000);
+            ->assertJsonPath('total_harga', 140000);
 
         $this->assertSame('D 9999 ZZZ', $metaRes->json('data.kendaraan.1.plat_nomor'));
         $this->assertSame($currentVersion + 1, $metaRes->json('data.version'));
 
-        // Verify payment & detail_layanan count untouched and audit trail recorded
-        $this->assertSame(3, DetailLayanan::query()->count());
-        $audit = RiwayatPerubahan::query()
+        // Verify detail_layanan count (4 lines after post-payment edit) and both edit + metadata audit trails recorded
+        $this->assertSame(4, DetailLayanan::query()->count());
+        $auditLogs = RiwayatPerubahan::query()
             ->where('entitas', 'pesanan')
             ->where('record_id', $orderId)
-            ->latest('id_riwayat')
-            ->firstOrFail();
+            ->orderBy('id_riwayat')
+            ->get();
 
-        $this->assertSame('METADATA_UPDATE', $audit->nilai_sesudah['aksi']);
-        $this->assertSame('Koreksi salah ketik plat nomor kendaraan kedua', $audit->alasan);
+        $paidEditAudit = $auditLogs->firstWhere('alasan', 'Koreksi harga dan tambah layanan vacuum pada kendaraan kedua setelah bayar');
+        $this->assertNotNull($paidEditAudit);
+        $this->assertSame(118000, $paidEditAudit->nilai_sebelum['total_harga']);
+        $this->assertSame(143000, $paidEditAudit->nilai_sesudah['total_harga']);
+
+        $ownerEditAudit = $auditLogs->firstWhere('alasan', 'Penyesuaian diskon owner pasca bayar');
+        $this->assertNotNull($ownerEditAudit);
+        $this->assertSame(143000, $ownerEditAudit->nilai_sebelum['total_harga']);
+        $this->assertSame(140000, $ownerEditAudit->nilai_sesudah['total_harga']);
+
+        $latestAudit = $auditLogs->last();
+        $this->assertSame('METADATA_UPDATE', $latestAudit->nilai_sesudah['aksi']);
+        $this->assertSame('Koreksi salah ketik plat nomor kendaraan kedua', $latestAudit->alasan);
     }
 
     private function createUser(string $role): Pengguna
