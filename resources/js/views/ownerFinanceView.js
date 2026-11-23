@@ -1,6 +1,17 @@
 import { generateIdempotencyKey, washnoteApi } from '../api/client.js';
 import { showToast } from '../state/store.js';
-import { escapeHtml, formatDateOnly, formatRupiah, renderErrorAlert, todayWibDateString } from '../utils/formatters.js';
+import {
+    badgeStatusAktif,
+    escapeHtml,
+    formatDateIndo,
+    formatDateOnly,
+    formatRupiah,
+    renderEmptyState,
+    renderErrorAlert,
+    renderLoadingState,
+    renderPageHeader,
+    todayWibDateString,
+} from '../utils/formatters.js';
 
 export function mountOwnerFinanceView(container) {
     let activeTab = 'reports';
@@ -48,34 +59,37 @@ export function mountOwnerFinanceView(container) {
     }
 
     function render() {
-        container.innerHTML = `
-            <div class="space-y-6">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 class="text-2xl font-bold tracking-tight text-slate-900">Keuangan, Pengeluaran & Laporan</h1>
-                        <p class="mt-0.5 text-sm text-slate-600">Laporan pemasukan berdasar invoice terbayar (WIB), pengelolaan pengeluaran, dan kategori biaya.</p>
-                    </div>
-                    <button id="fin-refresh-btn" type="button" class="shrink-0 whitespace-nowrap rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Muat Ulang</button>
-                </div>
+        const hasAnyData = Boolean(reportSummary) || reportDaily.length > 0 || expenseCategories.length > 0 || (expensesPage?.data || []).length > 0;
 
-                ${errorObj ? renderErrorAlert(errorObj) : ''}
+        container.innerHTML = `
+            <div class="space-y-5">
+                ${renderPageHeader({ title: 'Pengeluaran & Laporan' })}
+
+                ${errorObj && hasAnyData ? renderErrorAlert(errorObj) : ''}
 
                 <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
                     ${[
-                        ['reports', 'Laporan Ringkas & Harian'],
+                        ['reports', 'Laporan Harian'],
                         ['expenses', 'Pengeluaran'],
                         ['categories', 'Kategori Pengeluaran'],
                     ].map(([tab, label]) => `
-                        <button type="button" data-fin-tab="${tab}" class="rounded-xl px-3.5 py-2 text-xs font-semibold ${activeTab === tab ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'}">
+                        <button type="button" data-fin-tab="${tab}" class="rounded-lg px-3.5 py-2 text-xs font-semibold transition ${activeTab === tab ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'}">
                             ${escapeHtml(label)}
                         </button>
                     `).join('')}
                 </div>
 
-                ${isLoading ? '<div class="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Memuat data keuangan...</div>' : ''}
-                ${!isLoading && activeTab === 'reports' ? renderReportsTab() : ''}
-                ${!isLoading && activeTab === 'expenses' ? renderExpensesTab() : ''}
-                ${!isLoading && activeTab === 'categories' ? renderExpenseCategoriesTab() : ''}
+                ${isLoading ? `<div class="wn-card">${renderLoadingState('Memuat data keuangan...')}</div>` : errorObj && !hasAnyData ? `
+                    ${renderEmptyState({
+                        kind: 'error',
+                        title: 'Gagal memuat data keuangan',
+                        message: errorObj.message || 'Terjadi kendala saat mengambil laporan.',
+                        actionsHtml: '<button id="fin-retry-btn" type="button" class="wn-btn-secondary">Coba Lagi</button>',
+                    })}
+                ` : ''}
+                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'reports' ? renderReportsTab() : ''}
+                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'expenses' ? renderExpensesTab() : ''}
+                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'categories' ? renderExpenseCategoriesTab() : ''}
             </div>
         `;
 
@@ -83,67 +97,82 @@ export function mountOwnerFinanceView(container) {
     }
 
     function renderReportsTab() {
+        const hasPeriodActivity = reportDaily.some(
+            (d) => Number(d.jumlah_kendaraan ?? 0) > 0 || Number(d.pendapatan ?? 0) > 0 || Number(d.pengeluaran ?? 0) > 0
+        );
+
         return `
             <div class="space-y-5">
-                <form id="report-filter-form" class="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <form id="report-filter-form" class="wn-card flex flex-wrap items-end gap-3 p-4">
                     <div>
-                        <label class="mb-1 block text-xs font-medium text-slate-600">Tanggal Mulai</label>
-                        <input id="rep-start" type="date" required value="${escapeHtml(reportStart)}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                        <label for="rep-start" class="wn-label">Tanggal Mulai</label>
+                        <input id="rep-start" type="date" required value="${escapeHtml(reportStart)}" class="wn-input" />
                     </div>
                     <div>
-                        <label class="mb-1 block text-xs font-medium text-slate-600">Tanggal Akhir</label>
-                        <input id="rep-end" type="date" required value="${escapeHtml(reportEnd)}" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                        <label for="rep-end" class="wn-label">Tanggal Akhir</label>
+                        <input id="rep-end" type="date" required value="${escapeHtml(reportEnd)}" class="wn-input" />
                     </div>
-                    <button type="submit" class="rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Tampilkan Laporan</button>
+                    <button type="submit" class="wn-btn-primary">Tampilkan Laporan</button>
                 </form>
 
                 ${reportSummary ? `
                     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <p class="text-xs text-slate-500">Total Pendapatan</p>
+                        <div class="wn-card p-4">
+                            <p class="text-xs font-medium text-slate-500">Total Pendapatan</p>
                             <p class="mt-1 text-xl font-bold text-emerald-700 tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pendapatan))}</p>
                         </div>
-                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <p class="text-xs text-slate-500">Total Pengeluaran Aktif</p>
+                        <div class="wn-card p-4">
+                            <p class="text-xs font-medium text-slate-500">Total Pengeluaran Aktif</p>
                             <p class="mt-1 text-xl font-bold text-rose-700 tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pengeluaran))}</p>
                         </div>
-                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <p class="text-xs text-slate-500">Selisih Kas / Keuntungan Bersih</p>
+                        <div class="wn-card p-4">
+                            <p class="text-xs font-medium text-slate-500">Selisih Pendapatan & Pengeluaran</p>
                             <p class="mt-1 text-xl font-bold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(reportSummary.keuntungan_bersih))}</p>
+                            <p class="mt-1 text-[11px] text-slate-500">Pendapatan dikurangi pengeluaran</p>
                         </div>
-                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <p class="text-xs text-slate-500">Jumlah Kendaraan</p>
+                        <div class="wn-card p-4">
+                            <p class="text-xs font-medium text-slate-500">Jumlah Kendaraan</p>
                             <p class="mt-1 text-xl font-bold text-slate-900 tabular-nums">${reportSummary.jumlah_kendaraan ?? 0}</p>
                         </div>
                     </div>
                 ` : ''}
 
-                <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div class="border-b border-slate-200 px-4 py-3 text-sm font-bold text-slate-900">Rincian Harian (Asia/Jakarta)</div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                            <thead class="bg-slate-50 text-xs font-semibold uppercase text-slate-600">
-                                <tr>
-                                    <th class="px-4 py-3">Tanggal</th>
-                                    <th class="px-4 py-3 text-right">Kendaraan</th>
-                                    <th class="px-4 py-3 text-right">Pendapatan</th>
-                                    <th class="px-4 py-3 text-right">Pengeluaran</th>
-                                    <th class="px-4 py-3 text-right">Selisih Bersih</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-200">
-                                ${reportDaily.length === 0 ? '<tr><td colspan="5" class="p-6 text-center text-slate-500">Tidak ada data pada rentang tanggal ini.</td></tr>' : reportDaily.map((d) => `
+                <div class="wn-card overflow-hidden">
+                    <div class="border-b border-slate-200 px-4 py-3 text-sm font-bold text-slate-900">Rincian Harian (WIB)</div>
+                    ${reportDaily.length === 0 || !hasPeriodActivity ? `
+                        <div class="p-4">
+                            ${renderEmptyState({
+                                kind: reportStart !== today || reportEnd !== today ? 'filtered' : 'empty',
+                                title: 'Belum ada aktivitas keuangan pada periode ini',
+                                message: `Periode ${formatDateIndo(reportStart)} – ${formatDateIndo(reportEnd)} belum memiliki transaksi atau pengeluaran.`,
+                            })}
+                        </div>
+                    ` : `
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                                     <tr>
-                                        <td class="px-4 py-2.5 font-mono text-xs font-semibold text-slate-800">${escapeHtml(d.tanggal)}</td>
-                                        <td class="px-4 py-2.5 text-right tabular-nums">${d.jumlah_kendaraan ?? 0}</td>
-                                        <td class="px-4 py-2.5 text-right font-medium text-emerald-700 tabular-nums">${escapeHtml(formatRupiah(d.pendapatan))}</td>
-                                        <td class="px-4 py-2.5 text-right font-medium text-rose-700 tabular-nums">${escapeHtml(formatRupiah(d.pengeluaran))}</td>
-                                        <td class="px-4 py-2.5 text-right font-bold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(d.keuntungan_bersih))}</td>
+                                        <th class="px-4 py-3">Tanggal</th>
+                                        <th class="px-4 py-3 text-right">Kendaraan</th>
+                                        <th class="px-4 py-3 text-right">Pendapatan</th>
+                                        <th class="px-4 py-3 text-right">Pengeluaran</th>
+                                        <th class="px-4 py-3 text-right">Selisih</th>
                                     </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200">
+                                    ${reportDaily.map((d) => `
+                                        <tr class="hover:bg-slate-50">
+                                            <td class="px-4 py-3 text-xs font-semibold text-slate-800">${escapeHtml(formatDateIndo(d.tanggal))}</td>
+                                            <td class="px-4 py-3 text-right tabular-nums">${d.jumlah_kendaraan ?? 0}</td>
+                                            <td class="px-4 py-3 text-right font-medium text-emerald-700 tabular-nums">${escapeHtml(formatRupiah(d.pendapatan))}</td>
+                                            <td class="px-4 py-3 text-right font-medium text-rose-700 tabular-nums">${escapeHtml(formatRupiah(d.pengeluaran))}</td>
+                                            <td class="px-4 py-3 text-right font-bold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(d.keuntungan_bersih))}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `}
                 </div>
             </div>
         `;
@@ -157,11 +186,18 @@ export function mountOwnerFinanceView(container) {
 
         return `
             <div class="grid gap-6 lg:grid-cols-3">
-                <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
-                    ${rows.length === 0 ? '<div class="p-8 text-center text-sm text-slate-500">Belum ada catatan pengeluaran.</div>' : `
+                <div class="wn-card overflow-hidden lg:col-span-2">
+                    ${rows.length === 0 ? `
+                        <div class="p-4">
+                            ${renderEmptyState({
+                                kind: 'empty',
+                                title: 'Belum ada catatan pengeluaran',
+                            })}
+                        </div>
+                    ` : `
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                <thead class="bg-slate-50 text-xs font-semibold uppercase text-slate-600">
+                                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                                     <tr>
                                         <th class="px-4 py-3">Tanggal & Deskripsi</th>
                                         <th class="px-4 py-3">Kategori</th>
@@ -172,20 +208,20 @@ export function mountOwnerFinanceView(container) {
                                 </thead>
                                 <tbody class="divide-y divide-slate-200">
                                     ${rows.map((exp) => `
-                                        <tr>
-                                            <td class="px-4 py-2.5">
+                                        <tr class="hover:bg-slate-50">
+                                            <td class="px-4 py-3">
                                                 <div class="font-semibold text-slate-900">${escapeHtml(exp.deskripsi)}</div>
-                                                <div class="text-xs text-slate-500">${escapeHtml(formatDateOnly(exp.tanggal_pengeluaran))} • oleh ${escapeHtml(exp.pengguna?.nama_lengkap || '-')}</div>
+                                                <div class="text-xs text-slate-500">${escapeHtml(formatDateIndo(exp.tanggal_pengeluaran))} • ${escapeHtml(exp.pengguna?.nama_lengkap || '-')}</div>
                                             </td>
-                                            <td class="px-4 py-2.5 text-xs text-slate-700">${escapeHtml(exp.kategori?.nama_kategori || '-')}</td>
-                                            <td class="px-4 py-2.5 text-right font-bold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(exp.nominal))}</td>
-                                            <td class="px-4 py-2.5">
-                                                ${exp.status_pengeluaran === 'dibatalkan' ? '<span class="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">Dibatalkan</span>' : '<span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Aktif</span>'}
+                                            <td class="px-4 py-3 text-xs text-slate-700">${escapeHtml(exp.kategori?.nama_kategori || '-')}</td>
+                                            <td class="px-4 py-3 text-right font-bold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(exp.nominal))}</td>
+                                            <td class="px-4 py-3">
+                                                ${exp.status_pengeluaran === 'dibatalkan' ? '<span class="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/20">Dibatalkan</span>' : badgeStatusAktif(true)}
                                             </td>
-                                            <td class="px-4 py-2.5 text-right space-x-2">
+                                            <td class="px-4 py-3 text-right space-x-2.5 whitespace-nowrap">
                                                 ${exp.status_pengeluaran !== 'dibatalkan' ? `
-                                                    <button type="button" data-edit-exp="${exp.id_pengeluaran}" class="text-xs font-semibold text-teal-700">Ubah</button>
-                                                    <button type="button" data-cancel-exp="${exp.id_pengeluaran}" class="text-xs font-semibold text-rose-600">Batalkan</button>
+                                                    <button type="button" data-edit-exp="${exp.id_pengeluaran}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Ubah</button>
+                                                    <button type="button" data-cancel-exp="${exp.id_pengeluaran}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Batalkan</button>
                                                 ` : '-'}
                                             </td>
                                         </tr>
@@ -197,8 +233,8 @@ export function mountOwnerFinanceView(container) {
                             <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
                                 <span>Halaman ${expensesPage.current_page} dari ${expensesPage.last_page}</span>
                                 <div class="flex gap-2">
-                                    <button type="button" data-exp-page="${expensesPage.current_page - 1}" ${expensesPage.current_page <= 1 ? 'disabled' : ''} class="rounded-lg border border-slate-300 px-3 py-1 disabled:opacity-50">Sebelumnya</button>
-                                    <button type="button" data-exp-page="${expensesPage.current_page + 1}" ${expensesPage.current_page >= expensesPage.last_page ? 'disabled' : ''} class="rounded-lg border border-slate-300 px-3 py-1 disabled:opacity-50">Berikutnya</button>
+                                    <button type="button" data-exp-page="${expensesPage.current_page - 1}" ${expensesPage.current_page <= 1 ? 'disabled' : ''} class="wn-btn-secondary px-3 py-1 text-xs">Sebelumnya</button>
+                                    <button type="button" data-exp-page="${expensesPage.current_page + 1}" ${expensesPage.current_page >= expensesPage.last_page ? 'disabled' : ''} class="wn-btn-secondary px-3 py-1 text-xs">Berikutnya</button>
                                 </div>
                             </div>
                         ` : ''}
@@ -207,49 +243,56 @@ export function mountOwnerFinanceView(container) {
 
                 <div>
                     ${cancelling ? `
-                        <form id="exp-cancel-form" class="space-y-3 rounded-2xl border border-rose-200 bg-white p-5 shadow-sm">
+                        <form id="exp-cancel-form" class="space-y-3.5 rounded-xl border border-rose-200 bg-white p-5">
                             <div class="flex items-center justify-between">
                                 <h3 class="text-sm font-bold text-rose-800">Batalkan Pengeluaran</h3>
-                                <button type="button" id="exp-reset-mode" class="text-xs text-slate-500">Batal</button>
+                                <button type="button" id="exp-reset-mode" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>
                             </div>
                             <p class="text-xs text-slate-600">${escapeHtml(cancelling.deskripsi)} (${escapeHtml(formatRupiah(cancelling.nominal))})</p>
                             <div>
-                                <label class="mb-1 block text-xs font-medium text-slate-600">Alasan Pembatalan (Min. 5 karakter)</label>
-                                <input id="exp-cancel-reason" type="text" required minlength="5" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                                <label for="exp-cancel-reason" class="wn-label">Alasan Pembatalan (Min. 5 karakter)</label>
+                                <input id="exp-cancel-reason" type="text" required minlength="5" class="wn-input" />
                             </div>
-                            <button type="submit" ${isSubmitting ? 'disabled' : ''} class="w-full rounded-xl bg-rose-700 px-4 py-2 text-sm font-semibold text-white">Batalkan (Soft Void)</button>
+                            <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-danger w-full">Batalkan (Soft Void)</button>
                         </form>
+                    ` : activeCategories.length === 0 ? `
+                        ${renderEmptyState({
+                            kind: 'prerequisite',
+                            title: 'Kategori pengeluaran belum tersedia',
+                            message: 'Aktifkan minimal 1 kategori pengeluaran sebelum mencatat pengeluaran.',
+                            actionsHtml: '<button type="button" data-fin-tab="categories" class="wn-btn-primary text-xs">Buka Kategori Pengeluaran</button>',
+                        })}
                     ` : `
-                        <form id="exp-form" class="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <form id="exp-form" class="wn-card space-y-3.5 p-5">
                             <div class="flex items-center justify-between">
-                                <h3 class="text-sm font-bold text-slate-900">${editing ? 'Ubah Pengeluaran' : 'Catat Pengeluaran Baru'}</h3>
-                                ${editing ? '<button type="button" id="exp-reset-mode" class="text-xs text-slate-500">Batal</button>' : ''}
+                                <h3 class="text-sm font-bold text-slate-900">${editing ? 'Ubah Pengeluaran' : 'Catat Pengeluaran'}</h3>
+                                ${editing ? '<button type="button" id="exp-reset-mode" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>' : ''}
                             </div>
                             <div>
-                                <label class="mb-1 block text-xs font-medium text-slate-600">Kategori Pengeluaran</label>
-                                <select id="exp-cat" required class="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
+                                <label for="exp-cat" class="wn-label">Kategori</label>
+                                <select id="exp-cat" required class="wn-select">
                                     ${activeCategories.map((c) => `<option value="${c.id_kategori_pengeluaran}" ${Number(editing?.id_kategori_pengeluaran) === Number(c.id_kategori_pengeluaran) ? 'selected' : ''}>${escapeHtml(c.nama_kategori)}</option>`).join('')}
                                 </select>
                             </div>
                             <div>
-                                <label class="mb-1 block text-xs font-medium text-slate-600">Tanggal Pengeluaran</label>
-                                <input id="exp-date" type="date" required value="${escapeHtml(editing ? formatDateOnly(editing.tanggal_pengeluaran) : today)}" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                                <label for="exp-date" class="wn-label">Tanggal</label>
+                                <input id="exp-date" type="date" required value="${escapeHtml(editing ? formatDateOnly(editing.tanggal_pengeluaran) : today)}" class="wn-input" />
                             </div>
                             <div>
-                                <label class="mb-1 block text-xs font-medium text-slate-600">Deskripsi</label>
-                                <input id="exp-desc" type="text" required value="${escapeHtml(editing?.deskripsi || '')}" placeholder="Contoh: Sabun cuci motor 5L" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                                <label for="exp-desc" class="wn-label">Deskripsi</label>
+                                <input id="exp-desc" type="text" required value="${escapeHtml(editing?.deskripsi || '')}" placeholder="Contoh: Sabun cuci motor 5L" class="wn-input" />
                             </div>
                             <div>
-                                <label class="mb-1 block text-xs font-medium text-slate-600">Nominal (Rp)</label>
-                                <input id="exp-nominal" type="number" min="1" step="1" required value="${escapeHtml(editing ? Number(editing.nominal) : '')}" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm tabular-nums" />
+                                <label for="exp-nominal" class="wn-label">Nominal (Rp)</label>
+                                <input id="exp-nominal" type="number" min="1" step="1" required value="${escapeHtml(editing ? Number(editing.nominal) : '')}" class="wn-input tabular-nums" />
                             </div>
                             ${editing ? `
                                 <div>
-                                    <label class="mb-1 block text-xs font-medium text-slate-600">Alasan Perubahan (Min. 5 karakter)</label>
-                                    <input id="exp-reason" type="text" required minlength="5" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                                    <label for="exp-reason" class="wn-label">Alasan Perubahan (Min. 5 karakter)</label>
+                                    <input id="exp-reason" type="text" required minlength="5" class="wn-input" />
                                 </div>
                             ` : ''}
-                            <button type="submit" ${isSubmitting || activeCategories.length === 0 ? 'disabled' : ''} class="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">
+                            <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full">
                                 ${editing ? 'Simpan Perubahan' : 'Simpan Pengeluaran'}
                             </button>
                         </form>
@@ -264,51 +307,63 @@ export function mountOwnerFinanceView(container) {
 
         return `
             <div class="grid gap-6 lg:grid-cols-3">
-                <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:col-span-2">
-                    <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                        <thead class="bg-slate-50 text-xs font-semibold uppercase text-slate-600">
-                            <tr>
-                                <th class="px-4 py-3">Nama Kategori</th>
-                                <th class="px-4 py-3">Status</th>
-                                <th class="px-4 py-3 text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-200">
-                            ${expenseCategories.map((c) => `
-                                <tr>
-                                    <td class="px-4 py-2.5 font-semibold text-slate-900">${escapeHtml(c.nama_kategori)}</td>
-                                    <td class="px-4 py-2.5">${c.status_aktif ? '<span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Aktif</span>' : '<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">Nonaktif</span>'}</td>
-                                    <td class="px-4 py-2.5 text-right space-x-2">
-                                        <button type="button" data-edit-expcat="${c.id_kategori_pengeluaran}" class="text-xs font-semibold text-teal-700">Ubah</button>
-                                        ${c.status_aktif ? `<button type="button" data-del-expcat="${c.id_kategori_pengeluaran}" class="text-xs font-semibold text-rose-600">Nonaktifkan</button>` : ''}
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
+                <div class="wn-card overflow-hidden lg:col-span-2">
+                    ${expenseCategories.length === 0 ? `
+                        <div class="p-4">
+                            ${renderEmptyState({
+                                kind: 'empty',
+                                title: 'Belum ada kategori pengeluaran',
+                                message: 'Tambahkan kategori melalui formulir di samping.',
+                            })}
+                        </div>
+                    ` : `
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                    <tr>
+                                        <th class="px-4 py-3">Nama Kategori</th>
+                                        <th class="px-4 py-3">Status</th>
+                                        <th class="px-4 py-3 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200">
+                                    ${expenseCategories.map((c) => `
+                                        <tr class="hover:bg-slate-50">
+                                            <td class="px-4 py-3 font-semibold text-slate-900">${escapeHtml(c.nama_kategori)}</td>
+                                            <td class="px-4 py-3">${badgeStatusAktif(Boolean(c.status_aktif))}</td>
+                                            <td class="px-4 py-3 text-right space-x-2.5">
+                                                <button type="button" data-edit-expcat="${c.id_kategori_pengeluaran}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Ubah</button>
+                                                ${c.status_aktif ? `<button type="button" data-del-expcat="${c.id_kategori_pengeluaran}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Nonaktifkan</button>` : ''}
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `}
                 </div>
 
-                <form id="expcat-form" class="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <form id="expcat-form" class="wn-card space-y-3.5 self-start p-5">
                     <div class="flex items-center justify-between">
                         <h3 class="text-sm font-bold text-slate-900">${editing ? 'Ubah Kategori' : 'Tambah Kategori'}</h3>
-                        ${editing ? '<button type="button" id="cancel-expcat-edit" class="text-xs text-slate-500">Batal</button>' : ''}
+                        ${editing ? '<button type="button" id="cancel-expcat-edit" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>' : ''}
                     </div>
                     <div>
-                        <label class="mb-1 block text-xs font-medium text-slate-600">Nama Kategori</label>
-                        <input id="expcat-nama" type="text" required value="${escapeHtml(editing?.nama_kategori || '')}" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                        <label for="expcat-nama" class="wn-label">Nama Kategori</label>
+                        <input id="expcat-nama" type="text" required value="${escapeHtml(editing?.nama_kategori || '')}" class="wn-input" />
                     </div>
                     <label class="flex items-center gap-2 text-xs text-slate-700">
                         <input id="expcat-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="rounded border-slate-300 text-teal-700" />
                         <span>Status Aktif</span>
                     </label>
-                    <button type="submit" ${isSubmitting ? 'disabled' : ''} class="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white">Simpan Kategori</button>
+                    <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full">Simpan Kategori</button>
                 </form>
             </div>
         `;
     }
 
     function bindEvents() {
-        container.querySelector('#fin-refresh-btn')?.addEventListener('click', loadAll);
+        container.querySelector('#fin-retry-btn')?.addEventListener('click', loadAll);
         container.querySelectorAll('[data-fin-tab]').forEach((btn) =>
             btn.addEventListener('click', () => {
                 activeTab = btn.getAttribute('data-fin-tab');
@@ -368,13 +423,12 @@ export function mountOwnerFinanceView(container) {
                     expIdempotencyKey = generateIdempotencyKey();
                     showToast('Pengeluaran berhasil dicatat.', 'success');
                 }
+                isSubmitting = false;
                 await loadAll();
             } catch (err) {
                 errorObj = err;
                 isSubmitting = false;
                 render();
-            } finally {
-                isSubmitting = false;
             }
         });
 
@@ -388,13 +442,12 @@ export function mountOwnerFinanceView(container) {
                 await washnoteApi.cancelExpense(cancellingExpId, { alasan });
                 showToast('Pengeluaran berhasil dibatalkan.', 'success');
                 cancellingExpId = null;
+                isSubmitting = false;
                 await loadAll();
             } catch (err) {
                 errorObj = err;
                 isSubmitting = false;
                 render();
-            } finally {
-                isSubmitting = false;
             }
         });
 
@@ -449,13 +502,12 @@ export function mountOwnerFinanceView(container) {
                     await washnoteApi.createExpenseCategory(payload);
                     showToast('Kategori pengeluaran ditambahkan.', 'success');
                 }
+                isSubmitting = false;
                 await loadAll();
             } catch (err) {
                 errorObj = err;
                 isSubmitting = false;
                 render();
-            } finally {
-                isSubmitting = false;
             }
         });
     }

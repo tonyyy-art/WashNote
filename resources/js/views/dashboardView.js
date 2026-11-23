@@ -1,14 +1,18 @@
 import { washnoteApi } from '../api/client.js';
-import { APP_VIEWS, navigateTo, showToast } from '../state/store.js';
+import { APP_VIEWS, isOwner, navigateTo, showToast } from '../state/store.js';
 import {
     badgeKendaraan,
     badgeOperasional,
     badgePembayaran,
     badgePesanan,
     escapeHtml,
+    formatDateFullIndo,
     formatDateTimeWib,
     formatRupiah,
+    renderEmptyState,
     renderErrorAlert,
+    renderLoadingState,
+    renderPageHeader,
 } from '../utils/formatters.js';
 
 export function mountDashboardView(container) {
@@ -86,37 +90,24 @@ export function mountDashboardView(container) {
     function render() {
         const items = ordersPage?.data || [];
         const warnings = scheduleStatus?.warnings || [];
+        const hasFilter = search !== '' || paymentFilter !== '';
 
         container.innerHTML = `
-            <div class="space-y-6">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 class="text-2xl font-bold tracking-tight text-slate-900">Dashboard Antrean Kasir</h1>
-                        <p class="mt-0.5 text-sm text-slate-600">Pantau pesanan aktif & belum dibayar lintas hari secara real-time.</p>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2.5">
-                        <button
-                            id="dash-refresh-btn"
-                            type="button"
-                            class="inline-flex shrink-0 whitespace-nowrap items-center rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                        >
-                            Muat Ulang
+            <div class="space-y-5">
+                ${renderPageHeader({
+                    title: 'Dashboard Antrean',
+                    actionsHtml: `
+                        <button id="dash-create-order-btn" type="button" class="wn-btn-primary">
+                            + Buat Pesanan
                         </button>
-                        <button
-                            id="dash-create-order-btn"
-                            type="button"
-                            class="inline-flex shrink-0 whitespace-nowrap items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
-                        >
-                            + Buat Pesanan Baru
-                        </button>
-                    </div>
-                </div>
+                    `,
+                })}
 
                 ${scheduleStatus ? `
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="wn-card px-4 py-3">
                         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div class="flex flex-wrap items-center gap-2.5">
-                                <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Jam Operasional (${escapeHtml(scheduleStatus.hari || '-')}, ${escapeHtml(scheduleStatus.tanggal || '-')})</span>
+                                <span class="text-xs font-semibold text-slate-600">${escapeHtml(formatDateFullIndo(scheduleStatus.tanggal))}</span>
                                 ${badgeOperasional(scheduleStatus.status_jam_operasional)}
                             </div>
                             <button
@@ -124,11 +115,11 @@ export function mountDashboardView(container) {
                                 type="button"
                                 class="text-left text-xs font-semibold text-teal-700 hover:text-teal-900 sm:text-right"
                             >
-                                Lihat Jadwal & Pengecualian →
+                                ${isOwner() ? 'Kelola Jam Operasional →' : 'Lihat Jadwal →'}
                             </button>
                         </div>
                         ${warnings.length > 0 ? `
-                            <p class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                            <p class="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800">
                                 ${warnings.map((w) => escapeHtml(w)).join(' ')}
                             </p>
                         ` : ''}
@@ -137,71 +128,83 @@ export function mountDashboardView(container) {
 
                 ${summary ? `
                     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <p class="text-xs font-medium text-slate-500">Antrean Aktif (Lintas Hari)</p>
+                        <div class="wn-card p-4">
+                            <p class="text-xs font-medium text-slate-500">Antrean Aktif</p>
                             <p class="mt-1 text-2xl font-bold text-slate-900 tabular-nums">${summary.antrean_aktif_total ?? 0}</p>
-                            <p class="mt-1 text-xs text-slate-500">Berjalan: ${summary.berjalan_count ?? 0} • Selesai Belum Bayar: ${summary.selesai_belum_dibayar_count ?? 0}</p>
+                            <p class="mt-1 text-xs text-slate-500">Berjalan ${summary.berjalan_count ?? 0} • Selesai belum bayar ${summary.selesai_belum_dibayar_count ?? 0}</p>
                         </div>
-                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <p class="text-xs font-medium text-slate-500">Menunggu Pembayaran</p>
+                        <div class="wn-card p-4">
+                            <p class="text-xs font-medium text-slate-500">Belum Dibayar</p>
                             <p class="mt-1 text-2xl font-bold text-amber-700 tabular-nums">${summary.belum_dibayar_count ?? 0}</p>
-                            <p class="mt-1 text-xs text-slate-500">Pesanan aktif belum lunas</p>
+                            <p class="mt-1 text-xs text-slate-500">Menunggu pelunasan</p>
                         </div>
-                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <p class="text-xs font-medium text-slate-500">Proses Kendaraan Aktif</p>
+                        <div class="wn-card p-4">
+                            <p class="text-xs font-medium text-slate-500">Status Kendaraan Aktif</p>
                             <p class="mt-1 text-lg font-bold text-slate-900 tabular-nums">
                                 ${summary.kendaraan_menunggu_count ?? 0} M • ${summary.kendaraan_proses_count ?? 0} P • ${summary.kendaraan_selesai_count ?? 0} S
                             </p>
                             <p class="mt-1 text-xs text-slate-500">Menunggu / Proses / Selesai</p>
                         </div>
-                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div class="wn-card p-4">
                             <p class="text-xs font-medium text-slate-500">Pesanan Hari Ini (WIB)</p>
                             <p class="mt-1 text-2xl font-bold text-emerald-700 tabular-nums">${summary.hari_ini_total_pesanan ?? 0}</p>
-                            <p class="mt-1 text-xs text-slate-500">Selesai & Lunas: ${summary.hari_ini_selesai_dibayar_count ?? 0}</p>
+                            <p class="mt-1 text-xs text-slate-500">Selesai & lunas: ${summary.hari_ini_selesai_dibayar_count ?? 0}</p>
                         </div>
                     </div>
                 ` : ''}
 
-                <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="wn-card overflow-hidden">
                     <div class="border-b border-slate-200 p-4">
-                        <form id="dash-filter-form" class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <form id="dash-filter-form" class="flex flex-col gap-2.5 sm:flex-row sm:items-center">
                             <div class="flex-1">
                                 <input
                                     id="dash-search-input"
                                     type="search"
                                     value="${escapeHtml(search)}"
-                                    placeholder="Cari nomor nota (#TRX-...) atau plat nomor (mis. B 1234 GOW)..."
-                                    class="block w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
+                                    placeholder="Cari nomor nota (#TRX-...) atau plat nomor..."
+                                    class="wn-input"
                                 />
                             </div>
-                            <select
-                                id="dash-payment-select"
-                                class="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-700 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
-                            >
-                                <option value="" ${paymentFilter === '' ? 'selected' : ''}>Semua Status Pembayaran</option>
-                                <option value="belum_dibayar" ${paymentFilter === 'belum_dibayar' ? 'selected' : ''}>Belum Dibayar</option>
-                                <option value="sudah_dibayar" ${paymentFilter === 'sudah_dibayar' ? 'selected' : ''}>Sudah Dibayar (Masih Berjalan)</option>
-                            </select>
-                            <button
-                                type="submit"
-                                class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-                            >
+                            <div class="sm:w-56">
+                                <select id="dash-payment-select" class="wn-select">
+                                    <option value="" ${paymentFilter === '' ? 'selected' : ''}>Semua Status Pembayaran</option>
+                                    <option value="belum_dibayar" ${paymentFilter === 'belum_dibayar' ? 'selected' : ''}>Belum Dibayar</option>
+                                    <option value="sudah_dibayar" ${paymentFilter === 'sudah_dibayar' ? 'selected' : ''}>Sudah Dibayar (Berjalan)</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="wn-btn-dark">
                                 Filter
                             </button>
                         </form>
                     </div>
 
-                    ${errorObj ? `<div class="p-4">${renderErrorAlert(errorObj)}</div>` : ''}
+                    ${errorObj && items.length > 0 ? `<div class="p-4">${renderErrorAlert(errorObj)}</div>` : ''}
 
-                    ${isLoading ? `
-                        <div class="flex items-center justify-center gap-2 p-10 text-sm text-slate-500">
-                            <span class="h-5 w-5 animate-spin rounded-full border-2 border-teal-600 border-t-transparent"></span>
-                            Memuat antrean aktif...
+                    ${isLoading ? renderLoadingState('Memuat antrean aktif...') : errorObj && items.length === 0 ? `
+                        <div class="p-4">
+                            ${renderEmptyState({
+                                kind: 'error',
+                                title: 'Gagal memuat antrean aktif',
+                                message: errorObj.message || 'Terjadi kendala saat menghubungi server.',
+                                actionsHtml: '<button id="dash-retry-btn" type="button" class="wn-btn-secondary">Coba Lagi</button>',
+                            })}
+                        </div>
+                    ` : items.length === 0 && hasFilter ? `
+                        <div class="p-4">
+                            ${renderEmptyState({
+                                kind: 'filtered',
+                                title: 'Tidak ada antrean yang cocok',
+                                message: 'Ubah kata kunci pencarian atau pilih filter status pembayaran lain.',
+                                actionsHtml: '<button id="dash-reset-filter-btn" type="button" class="wn-btn-secondary">Reset Filter</button>',
+                            })}
                         </div>
                     ` : items.length === 0 ? `
-                        <div class="p-10 text-center">
-                            <p class="text-sm font-semibold text-slate-700">Tidak ada pesanan pada antrean aktif.</p>
-                            <p class="mt-1 text-xs text-slate-500">Pesanan yang sudah selesai dicuci dan sudah dibayar otomatis dipindahkan ke Riwayat Pesanan.</p>
+                        <div class="p-4">
+                            ${renderEmptyState({
+                                kind: 'empty',
+                                title: 'Belum ada antrean aktif',
+                                actionsHtml: '<button id="dash-empty-create-btn" type="button" class="wn-btn-primary">+ Buat Pesanan</button>',
+                            })}
                         </div>
                     ` : `
                         <div class="divide-y divide-slate-200">
@@ -339,8 +342,15 @@ export function mountDashboardView(container) {
     }
 
     function bindEvents() {
-        container.querySelector('#dash-refresh-btn')?.addEventListener('click', () => loadDashboard());
         container.querySelector('#dash-create-order-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.ORDER_CREATE));
+        container.querySelector('#dash-empty-create-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.ORDER_CREATE));
+        container.querySelector('#dash-retry-btn')?.addEventListener('click', () => loadDashboard());
+        container.querySelector('#dash-reset-filter-btn')?.addEventListener('click', () => {
+            search = '';
+            paymentFilter = '';
+            currentPage = 1;
+            loadDashboard();
+        });
         container.querySelector('#dash-hours-link')?.addEventListener('click', () => navigateTo(APP_VIEWS.OPERATING_HOURS));
 
         container.querySelector('#dash-filter-form')?.addEventListener('submit', (e) => {

@@ -15,12 +15,11 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
                             WN
                         </div>
                         <h1 class="text-2xl font-bold tracking-tight text-slate-900">WashNote POS</h1>
-                        <p class="mt-1 text-sm text-slate-600">Sistem Operasional & Pencatatan GALIROSO WASH</p>
+                        <p class="mt-0.5 text-xs font-semibold tracking-wider text-slate-500">GALIROSO WASH</p>
                     </div>
 
-                    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-                        <h2 class="text-lg font-semibold text-slate-900">Masuk ke Akun Internal</h2>
-                        <p class="mt-1 text-xs text-slate-500">Hak akses Owner atau Kasir ditentukan otomatis oleh akun Anda.</p>
+                    <div class="wn-card p-6 shadow-sm sm:p-8">
+                        <h2 class="text-lg font-bold text-slate-900">Masuk</h2>
 
                         ${authNotice ? `
                             <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="status">
@@ -32,7 +31,7 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
 
                         <form id="login-form" class="mt-5 space-y-4">
                             <div>
-                                <label for="login-username" class="block text-sm font-medium text-slate-700">Username</label>
+                                <label for="login-username" class="wn-label">Username</label>
                                 <input
                                     id="login-username"
                                     name="username"
@@ -40,12 +39,12 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
                                     required
                                     autocomplete="username"
                                     placeholder="Masukkan username"
-                                    class="mt-1.5 block w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
+                                    class="wn-input"
                                 />
                             </div>
 
                             <div>
-                                <label for="login-password" class="block text-sm font-medium text-slate-700">Kata Sandi</label>
+                                <label for="login-password" class="wn-label">Kata Sandi</label>
                                 <input
                                     id="login-password"
                                     name="password"
@@ -53,7 +52,7 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
                                     required
                                     autocomplete="current-password"
                                     placeholder="Masukkan kata sandi"
-                                    class="mt-1.5 block w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600/20"
+                                    class="wn-input"
                                 />
                             </div>
 
@@ -61,7 +60,7 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
                                 type="submit"
                                 id="login-submit"
                                 ${isLoading ? 'disabled' : ''}
-                                class="flex w-full items-center justify-center rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                class="wn-btn-primary w-full"
                             >
                                 ${isLoading ? 'Memverifikasi...' : 'Masuk'}
                             </button>

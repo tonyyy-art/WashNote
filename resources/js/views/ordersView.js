@@ -1,5 +1,5 @@
 import { generateIdempotencyKey, washnoteApi } from '../api/client.js';
-import { APP_VIEWS, navigateTo, showToast } from '../state/store.js';
+import { APP_VIEWS, isOwner, navigateTo, showToast } from '../state/store.js';
 import {
     badgeOperasional,
     badgePembayaran,
@@ -7,7 +7,10 @@ import {
     escapeHtml,
     formatDateTimeWib,
     formatRupiah,
+    renderEmptyState,
     renderErrorAlert,
+    renderLoadingState,
+    renderPageHeader,
 } from '../utils/formatters.js';
 
 export function mountOrdersListView(container) {
@@ -45,76 +48,90 @@ export function mountOrdersListView(container) {
 
     function render() {
         const items = ordersPage?.data || [];
+        const hasFilter =
+            filters.search !== '' ||
+            filters.status_pesanan !== '' ||
+            filters.status_pembayaran !== '' ||
+            filters.tanggal_mulai !== '' ||
+            filters.tanggal_akhir !== '';
 
         container.innerHTML = `
-            <div class="space-y-6">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 class="text-2xl font-bold tracking-tight text-slate-900">Riwayat & Daftar Pesanan</h1>
-                        <p class="mt-0.5 text-sm text-slate-600">Telusuri seluruh pesanan berdasarkan nomor nota, plat nomor, status proses, pembayaran, atau tanggal.</p>
-                    </div>
-                    <button
-                        id="orders-new-btn"
-                        type="button"
-                        class="inline-flex items-center justify-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-800"
-                    >
-                        + Buat Pesanan
-                    </button>
-                </div>
+            <div class="space-y-5">
+                ${renderPageHeader({
+                    title: 'Riwayat & Daftar Pesanan',
+                    actionsHtml: '<button id="orders-new-btn" type="button" class="wn-btn-primary">+ Buat Pesanan</button>',
+                })}
 
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <form id="orders-filter-form" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-                        <div class="lg:col-span-2">
-                            <label class="mb-1 block text-xs font-medium text-slate-600">Pencarian Nota / Plat</label>
+                <div class="wn-card p-4">
+                    <form id="orders-filter-form" class="flex flex-wrap items-end gap-3">
+                        <div class="min-w-[200px] flex-1">
+                            <label for="ord-search" class="wn-label">Nota / Plat Nomor</label>
                             <input
                                 id="ord-search"
                                 type="search"
                                 value="${escapeHtml(filters.search)}"
                                 placeholder="#TRX-... atau plat nomor"
-                                class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none"
+                                class="wn-input"
                             />
                         </div>
-                        <div>
-                            <label class="mb-1 block text-xs font-medium text-slate-600">Status Pesanan</label>
-                            <select id="ord-status" class="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-600 focus:outline-none">
+                        <div class="w-full sm:w-40">
+                            <label for="ord-status" class="wn-label">Status Pesanan</label>
+                            <select id="ord-status" class="wn-select">
                                 <option value="">Semua</option>
                                 <option value="berjalan" ${filters.status_pesanan === 'berjalan' ? 'selected' : ''}>Berjalan</option>
                                 <option value="selesai" ${filters.status_pesanan === 'selesai' ? 'selected' : ''}>Selesai</option>
                                 <option value="dibatalkan" ${filters.status_pesanan === 'dibatalkan' ? 'selected' : ''}>Dibatalkan</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="mb-1 block text-xs font-medium text-slate-600">Pembayaran</label>
-                            <select id="ord-pay" class="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-600 focus:outline-none">
+                        <div class="w-full sm:w-44">
+                            <label for="ord-pay" class="wn-label">Pembayaran</label>
+                            <select id="ord-pay" class="wn-select">
                                 <option value="">Semua</option>
                                 <option value="belum_dibayar" ${filters.status_pembayaran === 'belum_dibayar' ? 'selected' : ''}>Belum Dibayar</option>
                                 <option value="sudah_dibayar" ${filters.status_pembayaran === 'sudah_dibayar' ? 'selected' : ''}>Sudah Dibayar</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="mb-1 block text-xs font-medium text-slate-600">Dari Tanggal</label>
-                            <input id="ord-start" type="date" value="${escapeHtml(filters.tanggal_mulai)}" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
+                        <div class="w-[calc(50%-6px)] sm:w-40">
+                            <label for="ord-start" class="wn-label">Dari Tanggal</label>
+                            <input id="ord-start" type="date" value="${escapeHtml(filters.tanggal_mulai)}" class="wn-input" />
                         </div>
-                        <div class="flex flex-col justify-end gap-1">
-                            <label class="mb-1 block text-xs font-medium text-slate-600">Sampai Tanggal</label>
-                            <div class="flex gap-2">
-                                <input id="ord-end" type="date" value="${escapeHtml(filters.tanggal_akhir)}" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-600 focus:outline-none" />
-                                <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Cari</button>
-                            </div>
+                        <div class="w-[calc(50%-6px)] sm:w-40">
+                            <label for="ord-end" class="wn-label">Sampai Tanggal</label>
+                            <input id="ord-end" type="date" value="${escapeHtml(filters.tanggal_akhir)}" class="wn-input" />
                         </div>
+                        <button type="submit" class="wn-btn-dark">Cari</button>
                     </form>
                 </div>
 
-                ${errorObj ? renderErrorAlert(errorObj) : ''}
+                ${errorObj && items.length > 0 ? renderErrorAlert(errorObj) : ''}
 
-                <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    ${isLoading ? `
-                        <div class="flex items-center justify-center gap-2 p-10 text-sm text-slate-500">
-                            <span class="h-5 w-5 animate-spin rounded-full border-2 border-teal-600 border-t-transparent"></span>
-                            Memuat daftar pesanan...
+                <div class="wn-card overflow-hidden">
+                    ${isLoading ? renderLoadingState('Memuat daftar pesanan...') : errorObj && items.length === 0 ? `
+                        <div class="p-4">
+                            ${renderEmptyState({
+                                kind: 'error',
+                                title: 'Gagal memuat riwayat pesanan',
+                                message: errorObj.message || 'Terjadi kendala saat mengambil data.',
+                                actionsHtml: '<button id="orders-retry-btn" type="button" class="wn-btn-secondary">Coba Lagi</button>',
+                            })}
+                        </div>
+                    ` : items.length === 0 && hasFilter ? `
+                        <div class="p-4">
+                            ${renderEmptyState({
+                                kind: 'filtered',
+                                title: 'Pesanan tidak ditemukan',
+                                message: 'Ubah kata kunci, rentang tanggal, atau status filter.',
+                                actionsHtml: '<button id="orders-reset-filter-btn" type="button" class="wn-btn-secondary">Reset Filter</button>',
+                            })}
                         </div>
                     ` : items.length === 0 ? `
-                        <div class="p-10 text-center text-sm text-slate-500">Tidak ada pesanan yang cocok dengan filter saat ini.</div>
+                        <div class="p-4">
+                            ${renderEmptyState({
+                                kind: 'empty',
+                                title: 'Belum ada pesanan tercatat',
+                                actionsHtml: '<button id="orders-empty-new-btn" type="button" class="wn-btn-primary">+ Buat Pesanan</button>',
+                            })}
+                        </div>
                     ` : `
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
@@ -177,6 +194,12 @@ export function mountOrdersListView(container) {
         `;
 
         container.querySelector('#orders-new-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.ORDER_CREATE));
+        container.querySelector('#orders-empty-new-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.ORDER_CREATE));
+        container.querySelector('#orders-retry-btn')?.addEventListener('click', loadOrders);
+        container.querySelector('#orders-reset-filter-btn')?.addEventListener('click', () => {
+            filters = { search: '', status_pesanan: '', status_pembayaran: '', tanggal_mulai: '', tanggal_akhir: '', page: 1 };
+            loadOrders();
+        });
         container.querySelector('#orders-filter-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
             filters.search = container.querySelector('#ord-search')?.value?.trim() || '';
@@ -401,38 +424,42 @@ export function mountOrderCreateView(container) {
 
     function render() {
         const preview = calculateTotalsPreview();
-        const noCatalogReady = !isLoadingCatalog && (catalog.kategori_kendaraan.length === 0 || catalog.harga_layanan.length === 0);
+        const noCatalogReady = !isLoadingCatalog && !errorObj && (catalog.kategori_kendaraan.length === 0 || catalog.harga_layanan.length === 0);
+        const showOperationalAlert =
+            scheduleStatus &&
+            (scheduleStatus.status_jam_operasional !== 'dalam_jam' ||
+                scheduleStatus.perlu_konfirmasi_hari_libur ||
+                (scheduleStatus.warnings || []).length > 0);
+        const ownerMode = isOwner();
 
         container.innerHTML = `
-            <div class="space-y-6">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <button id="create-back-btn" type="button" class="mb-1 text-xs font-semibold text-teal-700 hover:text-teal-900">← Kembali ke Antrean</button>
-                        <h1 class="text-2xl font-bold tracking-tight text-slate-900">Buat Pesanan Baru</h1>
-                        <p class="mt-0.5 text-sm text-slate-600">Pilih kategori kendaraan, layanan utama dan/atau tambahan berdiri sendiri, serta penyesuaian harga sesuai batas tarif.</p>
-                    </div>
-                </div>
+            <div class="space-y-5">
+                ${renderPageHeader({
+                    backBtnId: 'create-back-btn',
+                    backLabel: '← Kembali ke Antrean',
+                    title: 'Buat Pesanan Baru',
+                })}
 
-                ${scheduleStatus ? `
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                ${showOperationalAlert ? `
+                    <div class="wn-card px-4 py-3">
                         <div class="flex flex-wrap items-center gap-2">
-                            <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Status Operasional Saat Ini:</span>
+                            <span class="text-xs font-semibold text-slate-600">Status Operasional:</span>
                             ${badgeOperasional(scheduleStatus.status_jam_operasional)}
                         </div>
                         ${(scheduleStatus.warnings || []).length > 0 ? `
-                            <p class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">${scheduleStatus.warnings.map((w) => escapeHtml(w)).join(' ')}</p>
+                            <p class="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">${scheduleStatus.warnings.map((w) => escapeHtml(w)).join(' ')}</p>
                         ` : ''}
                     </div>
                 ` : ''}
 
-                ${errorObj ? renderErrorAlert(errorObj) : ''}
+                ${errorObj && (!isLoadingCatalog && catalog.kategori_kendaraan.length > 0) ? renderErrorAlert(errorObj) : ''}
 
                 ${holidayConfirmationRequired ? `
-                    <div class="rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
-                        <h3 class="text-sm font-bold text-amber-900">Konfirmasi Operasional Hari Libur</h3>
-                        <p class="mt-1 text-xs text-amber-800">Hari ini tercatat sebagai hari libur operasional. Konfirmasikan apabila Anda tetap ingin memproses pesanan ini.</p>
+                    <div class="rounded-xl border border-amber-300 bg-amber-50 p-4">
+                        <h3 class="text-sm font-bold text-amber-900">Konfirmasi Hari Libur</h3>
+                        <p class="mt-1 text-xs text-amber-800">Hari ini tercatat sebagai hari libur operasional. Lanjutkan hanya jika pesanan tetap diproses.</p>
                         <div class="mt-3 flex gap-2">
-                            <button id="confirm-holiday-submit-btn" type="button" class="rounded-xl bg-amber-700 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800">
+                            <button id="confirm-holiday-submit-btn" type="button" class="rounded-lg bg-amber-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-amber-800">
                                 Konfirmasi & Simpan Pesanan
                             </button>
                         </div>
@@ -440,15 +467,25 @@ export function mountOrderCreateView(container) {
                 ` : ''}
 
                 ${isLoadingCatalog ? `
-                    <div class="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-10 text-sm text-slate-500">
-                        <span class="h-5 w-5 animate-spin rounded-full border-2 border-teal-600 border-t-transparent"></span>
-                        Memuat katalog kategori & tarif aktif...
-                    </div>
+                    <div class="wn-card">${renderLoadingState('Memuat katalog & tarif aktif...')}</div>
+                ` : errorObj && catalog.kategori_kendaraan.length === 0 ? `
+                    ${renderEmptyState({
+                        kind: 'error',
+                        title: 'Gagal memuat katalog layanan',
+                        message: errorObj.message || 'Katalog tidak dapat diambil dari server.',
+                        actionsHtml: '<button id="create-reload-catalog-btn" type="button" class="wn-btn-secondary">Coba Lagi</button>',
+                    })}
                 ` : noCatalogReady ? `
-                    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
-                        <p class="font-semibold">Katalog layanan aktif belum siap.</p>
-                        <p class="mt-1 text-xs">Pastikan Owner sudah mengaktifkan minimal 1 Kategori Kendaraan, Layanan, dan Tarif Harga Layanan sebelum membuat pesanan.</p>
-                    </div>
+                    ${renderEmptyState({
+                        kind: 'prerequisite',
+                        title: 'Katalog layanan aktif belum siap',
+                        message: ownerMode
+                            ? 'Tambahkan dan aktifkan minimal 1 kategori kendaraan, layanan, dan tarif terlebih dahulu.'
+                            : 'Hubungi Owner untuk mengaktifkan kategori kendaraan, layanan, dan tarif terlebih dahulu.',
+                        actionsHtml: ownerMode
+                            ? '<button id="create-open-catalog-btn" type="button" class="wn-btn-primary">Buka Katalog & Tarif</button><button id="create-reload-catalog-btn" type="button" class="wn-btn-secondary">Muat Ulang</button>'
+                            : '<button id="create-go-dash-btn" type="button" class="wn-btn-secondary">Kembali ke Dashboard</button><button id="create-reload-catalog-btn" type="button" class="wn-btn-secondary">Muat Ulang</button>',
+                    })}
                 ` : `
                     <form id="create-order-form" class="grid gap-6 lg:grid-cols-3">
                         <div class="space-y-4 lg:col-span-2">
@@ -535,8 +572,8 @@ export function mountOrderCreateView(container) {
 
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="mb-1 block text-xs font-semibold text-slate-700">Kategori Kendaraan</label>
-                        <select data-veh-cat="${vIdx}" class="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-600 focus:outline-none">
+                        <label class="wn-label">Kategori Kendaraan</label>
+                        <select data-veh-cat="${vIdx}" class="wn-select">
                             ${catalog.kategori_kendaraan.map((kat) => `
                                 <option value="${kat.id_kategori_kendaraan}" ${Number(kat.id_kategori_kendaraan) === Number(veh.id_kategori_kendaraan) ? 'selected' : ''}>
                                     ${escapeHtml(kat.nama_kategori)} (${escapeHtml(kat.jenis_kendaraan)})
@@ -584,8 +621,8 @@ export function mountOrderCreateView(container) {
                             <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5">
                                 <div class="grid gap-3 sm:grid-cols-12">
                                     <div class="sm:col-span-6">
-                                        <label class="mb-1 block text-xs font-medium text-slate-600">Pilih Layanan</label>
-                                        <select data-line-tariff="${vIdx}-${lIdx}" class="block w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:border-teal-600 focus:outline-none">
+                                        <label class="wn-label">Pilih Layanan</label>
+                                        <select data-line-tariff="${vIdx}-${lIdx}" class="wn-select">
                                             ${mainTariffs.length > 0 ? `<optgroup label="Layanan Utama">${mainTariffs.map((t) => `
                                                 <option value="${t.id_harga}" ${Number(t.id_harga) === Number(line.id_harga) ? 'selected' : ''}>
                                                     [Utama] ${escapeHtml(t.layanan?.nama_layanan)} — ${escapeHtml(formatRupiah(t.harga_dasar))}
@@ -639,6 +676,9 @@ export function mountOrderCreateView(container) {
 
     function bindCreateEvents() {
         container.querySelector('#create-back-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.DASHBOARD));
+        container.querySelector('#create-go-dash-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.DASHBOARD));
+        container.querySelector('#create-open-catalog-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.OWNER_CATALOG));
+        container.querySelector('#create-reload-catalog-btn')?.addEventListener('click', () => loadInitialData());
 
         container.querySelector('#add-vehicle-btn')?.addEventListener('click', () => {
             syncInputsFromDom();

@@ -113,17 +113,17 @@ function renderShellAndView() {
                     </nav>
 
                     <div class="border-t border-slate-200 pt-3">
-                        <button id="logout-btn" type="button" class="flex w-full items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100">
-                            Keluar (Logout)
+                        <button id="logout-btn" type="button" class="flex w-full items-center justify-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">
+                            Keluar
                         </button>
                     </div>
                 </div>
             </aside>
 
-            <main class="flex-1 p-4 sm:p-6 lg:p-8">
+            <main class="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
                 <div id="toast-outlet"></div>
 
-                <div id="view-outlet" class="mx-auto max-w-6xl"></div>
+                <div id="view-outlet" class="mx-auto w-full max-w-7xl"></div>
             </main>
         </div>
     `;

@@ -310,13 +310,13 @@ export function mountOrderDetailView(container, orderId) {
                             <h1 class="font-mono text-2xl font-bold text-slate-900">${escapeHtml(order.nomor_nota || `#${order.id_pesanan}`)}</h1>
                             ${badgePesanan(order.status_pesanan)}
                             ${badgePembayaran(order.pembayaran?.status_pembayaran || 'belum_dibayar')}
-                            ${order.status_jam_operasional ? badgeOperasional(order.status_jam_operasional) : ''}
+                            ${order.status_jam_operasional && order.status_jam_operasional !== 'dalam_jam' ? badgeOperasional(order.status_jam_operasional) : ''}
                         </div>
                         <p class="mt-1 text-xs text-slate-500">
-                            Waktu Pesanan: ${escapeHtml(formatDateTimeWib(order.waktu_pesanan))} • Dibuat oleh: ${escapeHtml(order.pengguna?.nama_lengkap || '-')}
+                            ${escapeHtml(formatDateTimeWib(order.waktu_pesanan))} • Kasir: ${escapeHtml(order.pengguna?.nama_lengkap || '-')}
                         </p>
                     </div>
-                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm">
+                    <div class="wn-card px-4 py-3 text-right">
                         <p class="text-xs text-slate-500">Total Tagihan</p>
                         <p class="text-xl font-bold text-teal-700 tabular-nums">${escapeHtml(formatRupiah(totals.total_harga))}</p>
                         <p class="text-[11px] text-slate-500">Utama ${escapeHtml(formatRupiah(totals.subtotal_utama))} • Tambahan ${escapeHtml(formatRupiah(totals.subtotal_tambahan))}</p>
@@ -371,9 +371,7 @@ export function mountOrderDetailView(container, orderId) {
                     </div>
                 ` : ''}
 
-                <div class="rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-3 text-xs text-sky-900">
-                    Status keseluruhan pesanan (<strong>Berjalan</strong> atau <strong>Selesai</strong>) diturunkan otomatis dari status cucian setiap kendaraan di bawah ini.
-                </div>
+                <p class="text-xs text-slate-500">Status pesanan mengikuti status cucian setiap kendaraan di bawah ini.</p>
 
                 <div class="grid gap-4 lg:grid-cols-2">
                     ${(order.kendaraan || []).map((veh, idx) => `
@@ -470,8 +468,8 @@ export function mountOrderDetailView(container, orderId) {
                                     </div>
                                     <div class="mt-3 grid gap-3 sm:grid-cols-2">
                                         <div>
-                                            <label class="mb-1 block text-xs font-medium text-slate-600">Kategori Kendaraan</label>
-                                            <select data-edit-cat="${vIdx}" class="block w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm">
+                                            <label class="wn-label">Kategori Kendaraan</label>
+                                            <select data-edit-cat="${vIdx}" class="wn-select">
                                                 ${catalog.kategori_kendaraan.map((kat) => `
                                                     <option value="${kat.id_kategori_kendaraan}" ${Number(kat.id_kategori_kendaraan) === Number(veh.id_kategori_kendaraan) ? 'selected' : ''}>
                                                         ${escapeHtml(kat.nama_kategori)}
@@ -480,8 +478,8 @@ export function mountOrderDetailView(container, orderId) {
                                             </select>
                                         </div>
                                         <div>
-                                            <label class="mb-1 block text-xs font-medium text-slate-600">Plat Nomor</label>
-                                            <input type="text" maxlength="20" data-edit-plat="${vIdx}" value="${escapeHtml(veh.plat_nomor)}" class="block w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm uppercase" />
+                                            <label class="wn-label">Plat Nomor</label>
+                                            <input type="text" maxlength="20" data-edit-plat="${vIdx}" value="${escapeHtml(veh.plat_nomor)}" class="wn-input uppercase" />
                                         </div>
                                     </div>
 
@@ -496,7 +494,7 @@ export function mountOrderDetailView(container, orderId) {
                                                 <div class="rounded-lg border border-slate-200 bg-white p-3">
                                                     <div class="grid gap-2 sm:grid-cols-12">
                                                         <div class="sm:col-span-6">
-                                                            <select data-edit-tariff="${vIdx}-${lIdx}" class="block w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs">
+                                                            <select data-edit-tariff="${vIdx}-${lIdx}" class="wn-select text-xs">
                                                                 ${options.map((opt) => `
                                                                     <option value="${opt.id_harga}" ${Number(opt.id_harga) === Number(line.id_harga) ? 'selected' : ''}>
                                                                         [${escapeHtml(opt.layanan?.tipe_layanan || 'utama')}] ${escapeHtml(opt.layanan?.nama_layanan || 'Layanan')} (${escapeHtml(formatRupiah(opt.harga_dasar))})
@@ -571,8 +569,8 @@ export function mountOrderDetailView(container, orderId) {
                 </div>
 
                 <div>
-                    <label for="pay-method" class="mb-1 block text-xs font-semibold text-slate-700">Metode Pembayaran</label>
-                    <select id="pay-method" class="block w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm">
+                    <label for="pay-method" class="wn-label">Metode Pembayaran</label>
+                    <select id="pay-method" class="wn-select">
                         <option value="tunai">Tunai (Cash)</option>
                         <option value="qris">QRIS</option>
                         <option value="transfer">Transfer Bank</option>
@@ -580,8 +578,8 @@ export function mountOrderDetailView(container, orderId) {
                 </div>
 
                 <div>
-                    <label for="pay-amount" class="mb-1 block text-xs font-semibold text-slate-700">Nominal Diterima (Rp)</label>
-                    <input id="pay-amount" type="number" min="1" step="1" required value="${Number(totals.total_harga)}" class="block w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm font-semibold tabular-nums" />
+                    <label for="pay-amount" class="wn-label">Nominal Diterima (Rp)</label>
+                    <input id="pay-amount" type="number" min="1" step="1" required value="${Number(totals.total_harga)}" class="wn-input font-semibold tabular-nums" />
                     <p id="pay-change-preview" class="mt-1.5 text-xs font-medium text-teal-700">Kembalian: Rp 0</p>
                 </div>
 

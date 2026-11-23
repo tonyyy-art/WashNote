@@ -1,6 +1,14 @@
 import { washnoteApi } from '../api/client.js';
 import { showToast } from '../state/store.js';
-import { escapeHtml, formatDateTimeWib, renderErrorAlert } from '../utils/formatters.js';
+import {
+    badgeStatusAktif,
+    escapeHtml,
+    formatDateTimeWib,
+    renderEmptyState,
+    renderErrorAlert,
+    renderLoadingState,
+    renderPageHeader,
+} from '../utils/formatters.js';
 
 export function mountOwnerStaffView(container) {
     let isLoading = true;
@@ -30,66 +38,94 @@ export function mountOwnerStaffView(container) {
     function render() {
         const rows = kasirPage?.data || [];
         const selected = selectedKasirId ? rows.find((r) => Number(r.id_pengguna) === Number(selectedKasirId)) : null;
+        const hasFilter = filters.search !== '' || filters.status !== 'all';
 
         container.innerHTML = `
-            <div class="space-y-6">
-                <div>
-                    <h1 class="text-2xl font-bold tracking-tight text-slate-900">Pengelolaan Akun Kasir</h1>
-                    <p class="mt-0.5 text-sm text-slate-600">Tambah akun Kasir, perbarui nama lengkap (username bersifat tetap), aktifkan/nonaktifkan akses, dan reset kata sandi.</p>
-                </div>
+            <div class="space-y-5">
+                ${renderPageHeader({ title: 'Akun Kasir' })}
 
-                ${errorObj ? renderErrorAlert(errorObj) : ''}
+                ${errorObj && rows.length > 0 ? renderErrorAlert(errorObj) : ''}
 
                 <div class="grid gap-6 lg:grid-cols-3">
                     <div class="space-y-4 lg:col-span-2">
-                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                            <form id="kasir-filter-form" class="flex flex-col gap-3 sm:flex-row">
-                                <input id="kasir-search" type="search" value="${escapeHtml(filters.search)}" placeholder="Cari nama atau username..." class="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-                                <select id="kasir-status" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm">
-                                    <option value="all" ${filters.status === 'all' ? 'selected' : ''}>Semua Status</option>
-                                    <option value="active" ${filters.status === 'active' ? 'selected' : ''}>Aktif</option>
-                                    <option value="inactive" ${filters.status === 'inactive' ? 'selected' : ''}>Nonaktif</option>
-                                </select>
-                                <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Filter</button>
+                        <div class="wn-card p-4">
+                            <form id="kasir-filter-form" class="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+                                <input id="kasir-search" type="search" value="${escapeHtml(filters.search)}" placeholder="Cari nama atau username..." class="wn-input flex-1" />
+                                <div class="sm:w-44">
+                                    <select id="kasir-status" class="wn-select">
+                                        <option value="all" ${filters.status === 'all' ? 'selected' : ''}>Semua Status</option>
+                                        <option value="active" ${filters.status === 'active' ? 'selected' : ''}>Aktif</option>
+                                        <option value="inactive" ${filters.status === 'inactive' ? 'selected' : ''}>Nonaktif</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="wn-btn-dark">Filter</button>
                             </form>
                         </div>
 
-                        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                            ${isLoading ? '<div class="p-8 text-center text-sm text-slate-500">Memuat daftar kasir...</div>' : rows.length === 0 ? '<div class="p-8 text-center text-sm text-slate-500">Belum ada akun kasir.</div>' : `
-                                <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                    <thead class="bg-slate-50 text-xs font-semibold uppercase text-slate-600">
-                                        <tr>
-                                            <th class="px-4 py-3">Kasir</th>
-                                            <th class="px-4 py-3">Status</th>
-                                            <th class="px-4 py-3 text-right">Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-200">
-                                        ${rows.map((row) => `
+                        <div class="wn-card overflow-hidden">
+                            ${isLoading ? renderLoadingState('Memuat daftar kasir...') : errorObj && rows.length === 0 ? `
+                                <div class="p-4">
+                                    ${renderEmptyState({
+                                        kind: 'error',
+                                        title: 'Gagal memuat akun kasir',
+                                        message: errorObj.message || 'Terjadi kendala saat mengambil data.',
+                                        actionsHtml: '<button id="kasir-retry-btn" type="button" class="wn-btn-secondary">Coba Lagi</button>',
+                                    })}
+                                </div>
+                            ` : rows.length === 0 && hasFilter ? `
+                                <div class="p-4">
+                                    ${renderEmptyState({
+                                        kind: 'filtered',
+                                        title: 'Akun kasir tidak ditemukan',
+                                        message: 'Ubah kata kunci pencarian atau pilih status lain.',
+                                        actionsHtml: '<button id="kasir-reset-filter-btn" type="button" class="wn-btn-secondary">Reset Filter</button>',
+                                    })}
+                                </div>
+                            ` : rows.length === 0 ? `
+                                <div class="p-4">
+                                    ${renderEmptyState({
+                                        kind: 'empty',
+                                        title: 'Belum ada akun kasir',
+                                        message: 'Buat akun Kasir melalui formulir di samping.',
+                                    })}
+                                </div>
+                            ` : `
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                                        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                                             <tr>
-                                                <td class="px-4 py-3">
-                                                    <div class="font-semibold text-slate-900">${escapeHtml(row.nama_lengkap)}</div>
-                                                    <div class="font-mono text-xs text-slate-500">@${escapeHtml(row.username)} • Dibuat ${escapeHtml(formatDateTimeWib(row.created_at))}</div>
-                                                </td>
-                                                <td class="px-4 py-3">
-                                                    ${row.status_aktif ? '<span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Aktif</span>' : '<span class="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700">Nonaktif</span>'}
-                                                </td>
-                                                <td class="px-4 py-3 text-right space-x-2">
-                                                    <button type="button" data-k-action="edit" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-teal-700">Edit Nama</button>
-                                                    <button type="button" data-k-action="status" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-amber-700">${row.status_aktif ? 'Nonaktifkan' : 'Aktifkan'}</button>
-                                                    <button type="button" data-k-action="reset" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-slate-700">Reset Sandi</button>
-                                                </td>
+                                                <th class="px-4 py-3">Kasir</th>
+                                                <th class="px-4 py-3">Status</th>
+                                                <th class="px-4 py-3 text-right">Aksi</th>
                                             </tr>
-                                        `).join('')}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-200">
+                                            ${rows.map((row) => `
+                                                <tr class="hover:bg-slate-50">
+                                                    <td class="px-4 py-3">
+                                                        <div class="font-semibold text-slate-900">${escapeHtml(row.nama_lengkap)}</div>
+                                                        <div class="font-mono text-xs text-slate-500">@${escapeHtml(row.username)} • ${escapeHtml(formatDateTimeWib(row.created_at))}</div>
+                                                    </td>
+                                                    <td class="px-4 py-3">
+                                                        ${badgeStatusAktif(Boolean(row.status_aktif))}
+                                                    </td>
+                                                    <td class="px-4 py-3 text-right space-x-2.5 whitespace-nowrap">
+                                                        <button type="button" data-k-action="edit" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Edit Nama</button>
+                                                        <button type="button" data-k-action="status" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-amber-700 hover:text-amber-900">${row.status_aktif ? 'Nonaktifkan' : 'Aktifkan'}</button>
+                                                        <button type="button" data-k-action="reset" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-slate-700 hover:text-slate-900">Reset Sandi</button>
+                                                    </td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
                             `}
                             ${kasirPage && kasirPage.last_page > 1 ? `
                                 <div class="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
                                     <span>Halaman ${kasirPage.current_page} dari ${kasirPage.last_page} (${kasirPage.total} akun)</span>
                                     <div class="flex gap-2">
-                                        <button type="button" data-kasir-page="${kasirPage.current_page - 1}" ${kasirPage.current_page <= 1 ? 'disabled' : ''} class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 disabled:opacity-40">Sebelumnya</button>
-                                        <button type="button" data-kasir-page="${kasirPage.current_page + 1}" ${kasirPage.current_page >= kasirPage.last_page ? 'disabled' : ''} class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 disabled:opacity-40">Berikutnya</button>
+                                        <button type="button" data-kasir-page="${kasirPage.current_page - 1}" ${kasirPage.current_page <= 1 ? 'disabled' : ''} class="wn-btn-secondary px-3 py-1.5 text-xs">Sebelumnya</button>
+                                        <button type="button" data-kasir-page="${kasirPage.current_page + 1}" ${kasirPage.current_page >= kasirPage.last_page ? 'disabled' : ''} class="wn-btn-secondary px-3 py-1.5 text-xs">Berikutnya</button>
                                     </div>
                                 </div>
                             ` : ''}
@@ -98,25 +134,25 @@ export function mountOwnerStaffView(container) {
 
                     <div class="space-y-4">
                         ${selected && modalMode ? renderActionPanel(selected, modalMode) : `
-                            <form id="kasir-create-form" class="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <h3 class="text-sm font-bold text-slate-900">Buat Akun Kasir Baru</h3>
+                            <form id="kasir-create-form" class="wn-card space-y-3.5 p-5">
+                                <h3 class="text-sm font-bold text-slate-900">Buat Akun Kasir</h3>
                                 <div>
-                                    <label class="mb-1 block text-xs font-medium text-slate-600">Nama Lengkap</label>
-                                    <input id="new-k-name" type="text" required minlength="2" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                                    <label for="new-k-name" class="wn-label">Nama Lengkap</label>
+                                    <input id="new-k-name" type="text" required minlength="2" class="wn-input" />
                                 </div>
                                 <div>
-                                    <label class="mb-1 block text-xs font-medium text-slate-600">Username (3–100 huruf/angka/._-)</label>
-                                    <input id="new-k-user" type="text" required minlength="3" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                                    <label for="new-k-user" class="wn-label">Username (3–100 huruf/angka/._-)</label>
+                                    <input id="new-k-user" type="text" required minlength="3" class="wn-input" />
                                 </div>
                                 <div>
-                                    <label class="mb-1 block text-xs font-medium text-slate-600">Kata Sandi (Min. 8 karakter)</label>
-                                    <input id="new-k-pass" type="password" required minlength="8" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                                    <label for="new-k-pass" class="wn-label">Kata Sandi (Min. 8 karakter)</label>
+                                    <input id="new-k-pass" type="password" required minlength="8" class="wn-input" />
                                 </div>
                                 <div>
-                                    <label class="mb-1 block text-xs font-medium text-slate-600">Konfirmasi Kata Sandi</label>
-                                    <input id="new-k-pass-conf" type="password" required minlength="8" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                                    <label for="new-k-pass-conf" class="wn-label">Konfirmasi Kata Sandi</label>
+                                    <input id="new-k-pass-conf" type="password" required minlength="8" class="wn-input" />
                                 </div>
-                                <button type="submit" ${isSubmitting ? 'disabled' : ''} class="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">Tambah Kasir</button>
+                                <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full">Tambah Kasir</button>
                             </form>
                         `}
                     </div>
@@ -130,16 +166,16 @@ export function mountOwnerStaffView(container) {
     function renderActionPanel(selected, mode) {
         if (mode === 'edit') {
             return `
-                <form id="kasir-edit-form" class="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <form id="kasir-edit-form" class="wn-card space-y-3.5 p-5">
                     <div class="flex items-center justify-between">
                         <h3 class="text-sm font-bold text-slate-900">Edit Akun @${escapeHtml(selected.username)}</h3>
-                        <button type="button" id="k-cancel-action" class="text-xs text-slate-500">Batal</button>
+                        <button type="button" id="k-cancel-action" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>
                     </div>
                     <div>
-                        <label class="mb-1 block text-xs font-medium text-slate-600">Nama Lengkap</label>
-                        <input id="edit-k-name" type="text" required minlength="2" value="${escapeHtml(selected.nama_lengkap)}" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                        <label for="edit-k-name" class="wn-label">Nama Lengkap</label>
+                        <input id="edit-k-name" type="text" required minlength="2" value="${escapeHtml(selected.nama_lengkap)}" class="wn-input" />
                     </div>
-                    <button type="submit" ${isSubmitting ? 'disabled' : ''} class="w-full rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white">Simpan Nama</button>
+                    <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full">Simpan Nama</button>
                 </form>
             `;
         }
@@ -147,17 +183,17 @@ export function mountOwnerStaffView(container) {
         if (mode === 'status') {
             const nextStatus = !selected.status_aktif;
             return `
-                <form id="kasir-status-form" class="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <form id="kasir-status-form" class="wn-card space-y-3.5 p-5">
                     <div class="flex items-center justify-between">
                         <h3 class="text-sm font-bold text-slate-900">${nextStatus ? 'Aktifkan' : 'Nonaktifkan'} @${escapeHtml(selected.username)}</h3>
-                        <button type="button" id="k-cancel-action" class="text-xs text-slate-500">Batal</button>
+                        <button type="button" id="k-cancel-action" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>
                     </div>
-                    <p class="text-xs text-slate-500">${nextStatus ? 'Kasir dapat masuk kembali.' : 'Seluruh token sesi aktif Kasir ini akan langsung dicabut.'}</p>
+                    <p class="text-xs text-slate-500">${nextStatus ? 'Kasir dapat masuk kembali.' : 'Seluruh sesi aktif Kasir ini akan langsung dicabut.'}</p>
                     <div>
-                        <label class="mb-1 block text-xs font-medium text-slate-600">Alasan Perubahan Status (Min. 5 karakter)</label>
-                        <input id="status-k-alasan" type="text" required minlength="5" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                        <label for="status-k-alasan" class="wn-label">Alasan Perubahan Status (Min. 5 karakter)</label>
+                        <input id="status-k-alasan" type="text" required minlength="5" class="wn-input" />
                     </div>
-                    <button type="submit" ${isSubmitting ? 'disabled' : ''} class="w-full rounded-xl ${nextStatus ? 'bg-emerald-700' : 'bg-rose-700'} px-4 py-2 text-sm font-semibold text-white">
+                    <button type="submit" ${isSubmitting ? 'disabled' : ''} class="${nextStatus ? 'wn-btn-primary' : 'wn-btn-danger'} w-full">
                         ${nextStatus ? 'Aktifkan Akun' : 'Nonaktifkan Akun'}
                     </button>
                 </form>
@@ -165,25 +201,30 @@ export function mountOwnerStaffView(container) {
         }
 
         return `
-            <form id="kasir-reset-form" class="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <form id="kasir-reset-form" class="wn-card space-y-3.5 p-5">
                 <div class="flex items-center justify-between">
                     <h3 class="text-sm font-bold text-slate-900">Reset Sandi @${escapeHtml(selected.username)}</h3>
-                    <button type="button" id="k-cancel-action" class="text-xs text-slate-500">Batal</button>
+                    <button type="button" id="k-cancel-action" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>
                 </div>
                 <div>
-                    <label class="mb-1 block text-xs font-medium text-slate-600">Kata Sandi Baru (Min. 8 karakter)</label>
-                    <input id="reset-k-pass" type="password" required minlength="8" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                    <label for="reset-k-pass" class="wn-label">Kata Sandi Baru (Min. 8 karakter)</label>
+                    <input id="reset-k-pass" type="password" required minlength="8" class="wn-input" />
                 </div>
                 <div>
-                    <label class="mb-1 block text-xs font-medium text-slate-600">Konfirmasi Kata Sandi</label>
-                    <input id="reset-k-conf" type="password" required minlength="8" class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+                    <label for="reset-k-conf" class="wn-label">Konfirmasi Kata Sandi</label>
+                    <input id="reset-k-conf" type="password" required minlength="8" class="wn-input" />
                 </div>
-                <button type="submit" ${isSubmitting ? 'disabled' : ''} class="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Reset & Cabut Sesi</button>
+                <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-dark w-full">Reset & Cabut Sesi</button>
             </form>
         `;
     }
 
     function bindEvents(selected) {
+        container.querySelector('#kasir-retry-btn')?.addEventListener('click', loadStaff);
+        container.querySelector('#kasir-reset-filter-btn')?.addEventListener('click', () => {
+            filters = { status: 'all', search: '', page: 1 };
+            loadStaff();
+        });
         container.querySelector('#kasir-filter-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
             filters.search = container.querySelector('#kasir-search')?.value?.trim() || '';
@@ -231,13 +272,12 @@ export function mountOwnerStaffView(container) {
             try {
                 await washnoteApi.createKasir(payload);
                 showToast('Akun kasir berhasil dibuat.', 'success');
+                isSubmitting = false;
                 await loadStaff();
             } catch (err) {
                 errorObj = err;
                 isSubmitting = false;
                 render();
-            } finally {
-                isSubmitting = false;
             }
         });
 
@@ -255,13 +295,12 @@ export function mountOwnerStaffView(container) {
                 showToast('Data kasir diperbarui.', 'success');
                 selectedKasirId = null;
                 modalMode = null;
+                isSubmitting = false;
                 await loadStaff();
             } catch (err) {
                 errorObj = err;
                 isSubmitting = false;
                 render();
-            } finally {
-                isSubmitting = false;
             }
         });
 
@@ -279,13 +318,12 @@ export function mountOwnerStaffView(container) {
                 showToast('Status kasir diperbarui.', 'success');
                 selectedKasirId = null;
                 modalMode = null;
+                isSubmitting = false;
                 await loadStaff();
             } catch (err) {
                 errorObj = err;
                 isSubmitting = false;
                 render();
-            } finally {
-                isSubmitting = false;
             }
         });
 
@@ -303,13 +341,12 @@ export function mountOwnerStaffView(container) {
                 showToast('Password kasir berhasil direset.', 'success');
                 selectedKasirId = null;
                 modalMode = null;
+                isSubmitting = false;
                 await loadStaff();
             } catch (err) {
                 errorObj = err;
                 isSubmitting = false;
                 render();
-            } finally {
-                isSubmitting = false;
             }
         });
     }
