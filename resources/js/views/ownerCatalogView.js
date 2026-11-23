@@ -57,9 +57,9 @@ export function mountOwnerCatalogView(container) {
 
                 <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
                     ${[
-                        ['categories', 'Kategori Kendaraan'],
-                        ['services', 'Layanan'],
-                        ['tariffs', 'Tarif & Batas Harga'],
+                        ['categories', `Kategori Kendaraan (${categories.length})`],
+                        ['services', `Layanan (${services.length})`],
+                        ['tariffs', `Tarif & Batas Harga (${tariffs.length})`],
                     ].map(([tab, label]) => `
                         <button type="button" data-cat-tab="${tab}" class="rounded-lg px-3.5 py-2 text-xs font-semibold transition ${activeTab === tab ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'}">
                             ${escapeHtml(label)}
@@ -140,7 +140,7 @@ export function mountOwnerCatalogView(container) {
                         </select>
                     </div>
                     <div>
-                        <label for="cat-nama" class="wn-label">Nama Kategori</label>
+                        <label for="cat-nama" class="wn-label">Nama Kategori <span class="text-rose-600">*</span></label>
                         <input id="cat-nama" type="text" required value="${escapeHtml(editing?.nama_kategori || '')}" placeholder="Mis. Motor Besar / Mobil SUV" class="wn-input" />
                     </div>
                     <label class="flex items-center gap-2 text-xs text-slate-700">
@@ -207,7 +207,7 @@ export function mountOwnerCatalogView(container) {
                         ${editing ? '<button type="button" id="cancel-srv-edit" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>' : ''}
                     </div>
                     <div>
-                        <label for="srv-nama" class="wn-label">Nama Layanan</label>
+                        <label for="srv-nama" class="wn-label">Nama Layanan <span class="text-rose-600">*</span></label>
                         <input id="srv-nama" type="text" required value="${escapeHtml(editing?.nama_layanan || '')}" placeholder="Mis. Cuci Salju / Semir Ban" class="wn-input" />
                     </div>
                     <div>
@@ -313,16 +313,16 @@ export function mountOwnerCatalogView(container) {
                             </select>
                         </div>
                         <div>
-                            <label for="tar-base" class="wn-label">Harga Dasar (Rp)</label>
+                            <label for="tar-base" class="wn-label">Harga Dasar (Rp) <span class="text-rose-600">*</span></label>
                             <input id="tar-base" type="number" min="0" required value="${escapeHtml(editing ? Number(editing.harga_dasar) : '')}" class="wn-input tabular-nums" />
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label for="tar-min" class="wn-label">Batas Bawah</label>
+                                <label for="tar-min" class="wn-label">Batas Bawah <span class="text-rose-600">*</span></label>
                                 <input id="tar-min" type="number" min="0" required value="${escapeHtml(editing ? Number(editing.batas_bawah) : '')}" class="wn-input tabular-nums" />
                             </div>
                             <div>
-                                <label for="tar-max" class="wn-label">Batas Atas</label>
+                                <label for="tar-max" class="wn-label">Batas Atas <span class="text-rose-600">*</span></label>
                                 <input id="tar-max" type="number" min="0" required value="${escapeHtml(editing ? Number(editing.batas_atas) : '')}" class="wn-input tabular-nums" />
                             </div>
                         </div>

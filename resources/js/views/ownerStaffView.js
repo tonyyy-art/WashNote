@@ -4,6 +4,7 @@ import {
     badgeStatusAktif,
     escapeHtml,
     formatDateTimeWib,
+    getInitials,
     renderEmptyState,
     renderErrorAlert,
     renderLoadingState,
@@ -99,12 +100,19 @@ export function mountOwnerStaffView(container) {
                                                 <th class="px-4 py-3 text-right">Aksi</th>
                                             </tr>
                                         </thead>
-                                        <tbody class="divide-y divide-slate-200">
+                                <tbody class="divide-y divide-slate-200">
                                             ${rows.map((row) => `
                                                 <tr class="hover:bg-slate-50">
                                                     <td class="px-4 py-3">
-                                                        <div class="font-semibold text-slate-900">${escapeHtml(row.nama_lengkap)}</div>
-                                                        <div class="font-mono text-xs text-slate-500">@${escapeHtml(row.username)} • ${escapeHtml(formatDateTimeWib(row.created_at))}</div>
+                                                        <div class="flex items-center gap-3">
+                                                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${row.status_aktif ? 'bg-teal-50 text-teal-800' : 'bg-slate-100 text-slate-500'} text-xs font-bold">
+                                                                ${escapeHtml(getInitials(row.nama_lengkap))}
+                                                            </div>
+                                                            <div>
+                                                                <div class="font-semibold ${row.status_aktif ? 'text-slate-900' : 'text-slate-400 line-through'}">${escapeHtml(row.nama_lengkap)}</div>
+                                                                <div class="font-mono text-xs text-slate-500">@${escapeHtml(row.username)} • ${escapeHtml(formatDateTimeWib(row.created_at))}</div>
+                                                            </div>
+                                                        </div>
                                                     </td>
                                                     <td class="px-4 py-3">
                                                         ${badgeStatusAktif(Boolean(row.status_aktif))}
@@ -137,19 +145,19 @@ export function mountOwnerStaffView(container) {
                             <form id="kasir-create-form" class="wn-card space-y-3.5 p-5">
                                 <h3 class="text-sm font-bold text-slate-900">Buat Akun Kasir</h3>
                                 <div>
-                                    <label for="new-k-name" class="wn-label">Nama Lengkap</label>
+                                    <label for="new-k-name" class="wn-label">Nama Lengkap <span class="text-rose-600">*</span></label>
                                     <input id="new-k-name" type="text" required minlength="2" class="wn-input" />
                                 </div>
                                 <div>
-                                    <label for="new-k-user" class="wn-label">Username (3–100 huruf/angka/._-)</label>
+                                    <label for="new-k-user" class="wn-label">Username <span class="text-rose-600">*</span> <span class="font-normal text-slate-400">(3–100 huruf/angka/._-)</span></label>
                                     <input id="new-k-user" type="text" required minlength="3" class="wn-input" />
                                 </div>
                                 <div>
-                                    <label for="new-k-pass" class="wn-label">Kata Sandi (Min. 8 karakter)</label>
+                                    <label for="new-k-pass" class="wn-label">Kata Sandi <span class="text-rose-600">*</span> <span class="font-normal text-slate-400">(Min. 8 karakter)</span></label>
                                     <input id="new-k-pass" type="password" required minlength="8" class="wn-input" />
                                 </div>
                                 <div>
-                                    <label for="new-k-pass-conf" class="wn-label">Konfirmasi Kata Sandi</label>
+                                    <label for="new-k-pass-conf" class="wn-label">Konfirmasi Kata Sandi <span class="text-rose-600">*</span></label>
                                     <input id="new-k-pass-conf" type="password" required minlength="8" class="wn-input" />
                                 </div>
                                 <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full">Tambah Kasir</button>

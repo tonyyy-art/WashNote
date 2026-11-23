@@ -28,6 +28,7 @@ export function mountOwnerFinanceView(container) {
     let expenseCategories = [];
     let expensesPage = null;
     let currentExpPage = 1;
+    let expenseStatusFilter = 'all';
     let expIdempotencyKey = generateIdempotencyKey();
     let editingExpId = null;
     let cancellingExpId = null;
@@ -96,43 +97,69 @@ export function mountOwnerFinanceView(container) {
         bindEvents();
     }
 
+    function shiftWibDate(baseYmd, deltaDays) {
+        const dt = new Date(`${baseYmd}T12:00:00+07:00`);
+        dt.setDate(dt.getDate() + deltaDays);
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Jakarta',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).format(dt);
+    }
+
     function renderReportsTab() {
         const hasPeriodActivity = reportDaily.some(
             (d) => Number(d.jumlah_kendaraan ?? 0) > 0 || Number(d.pendapatan ?? 0) > 0 || Number(d.pengeluaran ?? 0) > 0
         );
+        const selisih = Number(reportSummary?.keuntungan_bersih ?? 0);
+        const selisihSign = selisih > 0 ? '+ ' : selisih < 0 ? '- ' : '';
 
         return `
             <div class="space-y-5">
-                <form id="report-filter-form" class="wn-card flex flex-wrap items-end gap-3 p-4">
-                    <div>
-                        <label for="rep-start" class="wn-label">Tanggal Mulai</label>
-                        <input id="rep-start" type="date" required value="${escapeHtml(reportStart)}" class="wn-input" />
+                <form id="report-filter-form" class="wn-card flex flex-wrap items-end justify-between gap-3 p-4">
+                    <div class="flex flex-wrap items-end gap-3">
+                        <div>
+                            <label for="rep-start" class="wn-label">Tanggal Mulai</label>
+                            <input id="rep-start" type="date" required value="${escapeHtml(reportStart)}" class="wn-input" />
+                        </div>
+                        <div>
+                            <label for="rep-end" class="wn-label">Tanggal Akhir</label>
+                            <input id="rep-end" type="date" required value="${escapeHtml(reportEnd)}" class="wn-input" />
+                        </div>
+                        <button type="submit" class="wn-btn-primary">Tampilkan Laporan</button>
                     </div>
-                    <div>
-                        <label for="rep-end" class="wn-label">Tanggal Akhir</label>
-                        <input id="rep-end" type="date" required value="${escapeHtml(reportEnd)}" class="wn-input" />
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button type="button" data-rep-preset="today" class="wn-btn-secondary px-3 py-1.5 text-xs">Hari Ini</button>
+                        <button type="button" data-rep-preset="7d" class="wn-btn-secondary px-3 py-1.5 text-xs">7 Hari</button>
+                        <button type="button" data-rep-preset="month" class="wn-btn-secondary px-3 py-1.5 text-xs">Bulan Ini</button>
                     </div>
-                    <button type="submit" class="wn-btn-primary">Tampilkan Laporan</button>
                 </form>
 
                 ${reportSummary ? `
-                    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                        <div class="wn-card p-4">
-                            <p class="text-xs font-medium text-slate-500">Total Pendapatan</p>
-                            <p class="mt-1 text-xl font-bold text-emerald-700 tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pendapatan))}</p>
+                    <div class="grid gap-4 lg:grid-cols-3">
+                        <div class="rounded-2xl bg-slate-900 p-5 text-white shadow-sm">
+                            <p class="text-xs font-medium text-slate-300">Selisih Pendapatan & Pengeluaran</p>
+                            <p class="mt-2 text-2xl font-bold tabular-nums">${escapeHtml(`${selisihSign}${formatRupiah(Math.abs(selisih))}`)}</p>
+                            <p class="mt-1 text-xs text-slate-300">Pendapatan lunas dikurangi pengeluaran aktif (${escapeHtml(formatDateIndo(reportStart))} – ${escapeHtml(formatDateIndo(reportEnd))})</p>
                         </div>
-                        <div class="wn-card p-4">
-                            <p class="text-xs font-medium text-slate-500">Total Pengeluaran Aktif</p>
-                            <p class="mt-1 text-xl font-bold text-rose-700 tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pengeluaran))}</p>
-                        </div>
-                        <div class="wn-card p-4">
-                            <p class="text-xs font-medium text-slate-500">Selisih Pendapatan & Pengeluaran</p>
-                            <p class="mt-1 text-xl font-bold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(reportSummary.keuntungan_bersih))}</p>
-                            <p class="mt-1 text-[11px] text-slate-500">Pendapatan dikurangi pengeluaran</p>
-                        </div>
-                        <div class="wn-card p-4">
-                            <p class="text-xs font-medium text-slate-500">Jumlah Kendaraan</p>
-                            <p class="mt-1 text-xl font-bold text-slate-900 tabular-nums">${reportSummary.jumlah_kendaraan ?? 0}</p>
+
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:col-span-2">
+                            <div class="wn-card p-4">
+                                <p class="text-xs font-medium text-slate-500">Total Pendapatan</p>
+                                <p class="mt-2 text-xl font-bold text-emerald-700 tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pendapatan))}</p>
+                                <p class="mt-1 text-xs text-slate-500">Berdasarkan pembayaran lunas</p>
+                            </div>
+                            <div class="wn-card p-4">
+                                <p class="text-xs font-medium text-slate-500">Total Pengeluaran Aktif</p>
+                                <p class="mt-2 text-xl font-bold text-rose-700 tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pengeluaran))}</p>
+                                <p class="mt-1 text-xs text-slate-500">Pengeluaran batal dikecualikan</p>
+                            </div>
+                            <div class="wn-card p-4">
+                                <p class="text-xs font-medium text-slate-500">Jumlah Kendaraan</p>
+                                <p class="mt-2 text-xl font-bold text-slate-900 tabular-nums">${reportSummary.jumlah_kendaraan ?? 0}</p>
+                                <p class="mt-1 text-xs text-slate-500">Transaksi aktif non-batal</p>
+                            </div>
                         </div>
                     </div>
                 ` : ''}
@@ -179,19 +206,49 @@ export function mountOwnerFinanceView(container) {
     }
 
     function renderExpensesTab() {
-        const rows = expensesPage?.data || [];
+        const allRows = expensesPage?.data || [];
+        const rows = allRows.filter((exp) => {
+            if (expenseStatusFilter === 'aktif') {
+                return exp.status_pengeluaran !== 'dibatalkan';
+            }
+            if (expenseStatusFilter === 'dibatalkan') {
+                return exp.status_pengeluaran === 'dibatalkan';
+            }
+            return true;
+        });
         const activeCategories = expenseCategories.filter((c) => c.status_aktif);
-        const editing = editingExpId ? rows.find((r) => Number(r.id_pengeluaran) === Number(editingExpId)) : null;
-        const cancelling = cancellingExpId ? rows.find((r) => Number(r.id_pengeluaran) === Number(cancellingExpId)) : null;
+        const editing = editingExpId ? allRows.find((r) => Number(r.id_pengeluaran) === Number(editingExpId)) : null;
+        const cancelling = cancellingExpId ? allRows.find((r) => Number(r.id_pengeluaran) === Number(cancellingExpId)) : null;
 
         return `
             <div class="grid gap-6 lg:grid-cols-3">
                 <div class="wn-card overflow-hidden lg:col-span-2">
-                    ${rows.length === 0 ? `
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+                        <div class="inline-flex rounded-lg bg-slate-100 p-1 text-xs font-semibold">
+                            ${[
+                                ['all', `Semua (${allRows.length})`],
+                                ['aktif', `Aktif (${allRows.filter((r) => r.status_pengeluaran !== 'dibatalkan').length})`],
+                                ['dibatalkan', `Dibatalkan (${allRows.filter((r) => r.status_pengeluaran === 'dibatalkan').length})`],
+                            ].map(([st, label]) => `
+                                <button type="button" data-exp-status="${st}" class="rounded-md px-3 py-1 transition ${expenseStatusFilter === st ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
+                                    ${escapeHtml(label)}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ${allRows.length === 0 ? `
                         <div class="p-4">
                             ${renderEmptyState({
                                 kind: 'empty',
                                 title: 'Belum ada catatan pengeluaran',
+                            })}
+                        </div>
+                    ` : rows.length === 0 ? `
+                        <div class="p-4">
+                            ${renderEmptyState({
+                                kind: 'filtered',
+                                title: 'Tidak ada pengeluaran pada status ini',
+                                actionsHtml: '<button type="button" data-exp-status="all" class="wn-btn-secondary text-xs">Tampilkan Semua</button>',
                             })}
                         </div>
                     ` : `
@@ -207,25 +264,30 @@ export function mountOwnerFinanceView(container) {
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-200">
-                                    ${rows.map((exp) => `
-                                        <tr class="hover:bg-slate-50">
-                                            <td class="px-4 py-3">
-                                                <div class="font-semibold text-slate-900">${escapeHtml(exp.deskripsi)}</div>
-                                                <div class="text-xs text-slate-500">${escapeHtml(formatDateIndo(exp.tanggal_pengeluaran))} • ${escapeHtml(exp.pengguna?.nama_lengkap || '-')}</div>
-                                            </td>
-                                            <td class="px-4 py-3 text-xs text-slate-700">${escapeHtml(exp.kategori?.nama_kategori || '-')}</td>
-                                            <td class="px-4 py-3 text-right font-bold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(exp.nominal))}</td>
-                                            <td class="px-4 py-3">
-                                                ${exp.status_pengeluaran === 'dibatalkan' ? '<span class="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/20">Dibatalkan</span>' : badgeStatusAktif(true)}
-                                            </td>
-                                            <td class="px-4 py-3 text-right space-x-2.5 whitespace-nowrap">
-                                                ${exp.status_pengeluaran !== 'dibatalkan' ? `
-                                                    <button type="button" data-edit-exp="${exp.id_pengeluaran}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Ubah</button>
-                                                    <button type="button" data-cancel-exp="${exp.id_pengeluaran}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Batalkan</button>
-                                                ` : '-'}
-                                            </td>
-                                        </tr>
-                                    `).join('')}
+                                    ${rows.map((exp) => {
+                                        const isVoid = exp.status_pengeluaran === 'dibatalkan';
+                                        return `
+                                            <tr class="hover:bg-slate-50">
+                                                <td class="px-4 py-3">
+                                                    <div class="font-semibold ${isVoid ? 'text-slate-400 line-through' : 'text-slate-900'}">${escapeHtml(exp.deskripsi)}</div>
+                                                    <div class="text-xs text-slate-500">${escapeHtml(formatDateIndo(exp.tanggal_pengeluaran))} • ${escapeHtml(exp.pengguna?.nama_lengkap || '-')}</div>
+                                                </td>
+                                                <td class="px-4 py-3 text-xs text-slate-700">${escapeHtml(exp.kategori?.nama_kategori || '-')}</td>
+                                                <td class="px-4 py-3 text-right font-bold tabular-nums ${isVoid ? 'text-slate-400 line-through' : 'text-rose-700'}">
+                                                    ${isVoid ? escapeHtml(formatRupiah(exp.nominal)) : `- ${escapeHtml(formatRupiah(exp.nominal))}`}
+                                                </td>
+                                                <td class="px-4 py-3">
+                                                    ${isVoid ? '<span class="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/20">Dibatalkan</span>' : badgeStatusAktif(true)}
+                                                </td>
+                                                <td class="px-4 py-3 text-right space-x-2.5 whitespace-nowrap">
+                                                    ${!isVoid ? `
+                                                        <button type="button" data-edit-exp="${exp.id_pengeluaran}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Ubah</button>
+                                                        <button type="button" data-cancel-exp="${exp.id_pengeluaran}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Batalkan</button>
+                                                    ` : '-'}
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
                                 </tbody>
                             </table>
                         </div>
@@ -250,7 +312,7 @@ export function mountOwnerFinanceView(container) {
                             </div>
                             <p class="text-xs text-slate-600">${escapeHtml(cancelling.deskripsi)} (${escapeHtml(formatRupiah(cancelling.nominal))})</p>
                             <div>
-                                <label for="exp-cancel-reason" class="wn-label">Alasan Pembatalan (Min. 5 karakter)</label>
+                                <label for="exp-cancel-reason" class="wn-label">Alasan Pembatalan <span class="text-rose-600">*</span> <span class="font-normal text-slate-500">(Min. 5 karakter)</span></label>
                                 <input id="exp-cancel-reason" type="text" required minlength="5" class="wn-input" />
                             </div>
                             <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-danger w-full">Batalkan (Soft Void)</button>
@@ -269,26 +331,32 @@ export function mountOwnerFinanceView(container) {
                                 ${editing ? '<button type="button" id="exp-reset-mode" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>' : ''}
                             </div>
                             <div>
-                                <label for="exp-cat" class="wn-label">Kategori</label>
+                                <label for="exp-cat" class="wn-label">Kategori <span class="text-rose-600">*</span></label>
                                 <select id="exp-cat" required class="wn-select">
                                     ${activeCategories.map((c) => `<option value="${c.id_kategori_pengeluaran}" ${Number(editing?.id_kategori_pengeluaran) === Number(c.id_kategori_pengeluaran) ? 'selected' : ''}>${escapeHtml(c.nama_kategori)}</option>`).join('')}
                                 </select>
                             </div>
                             <div>
-                                <label for="exp-date" class="wn-label">Tanggal</label>
+                                <label for="exp-date" class="wn-label">Tanggal <span class="text-rose-600">*</span></label>
                                 <input id="exp-date" type="date" required value="${escapeHtml(editing ? formatDateOnly(editing.tanggal_pengeluaran) : today)}" class="wn-input" />
                             </div>
                             <div>
-                                <label for="exp-desc" class="wn-label">Deskripsi</label>
+                                <label for="exp-desc" class="wn-label">Deskripsi <span class="text-rose-600">*</span></label>
                                 <input id="exp-desc" type="text" required value="${escapeHtml(editing?.deskripsi || '')}" placeholder="Contoh: Sabun cuci motor 5L" class="wn-input" />
                             </div>
                             <div>
-                                <label for="exp-nominal" class="wn-label">Nominal (Rp)</label>
+                                <label for="exp-nominal" class="wn-label">Nominal (Rp) <span class="text-rose-600">*</span></label>
                                 <input id="exp-nominal" type="number" min="1" step="1" required value="${escapeHtml(editing ? Number(editing.nominal) : '')}" class="wn-input tabular-nums" />
+                            </div>
+                            <div class="rounded-lg bg-slate-50 px-3 py-2 text-xs">
+                                <div class="flex items-center justify-between text-slate-600">
+                                    <span>Dampak Kas Harian</span>
+                                    <span id="exp-preview-nominal" class="font-bold text-rose-700 tabular-nums">${editing ? `- ${escapeHtml(formatRupiah(editing.nominal))}` : '- Rp 0'}</span>
+                                </div>
                             </div>
                             ${editing ? `
                                 <div>
-                                    <label for="exp-reason" class="wn-label">Alasan Perubahan (Min. 5 karakter)</label>
+                                    <label for="exp-reason" class="wn-label">Alasan Perubahan <span class="text-rose-600">*</span> <span class="font-normal text-slate-500">(Min. 5 karakter)</span></label>
                                     <input id="exp-reason" type="text" required minlength="5" class="wn-input" />
                                 </div>
                             ` : ''}
@@ -377,6 +445,38 @@ export function mountOwnerFinanceView(container) {
             reportStart = container.querySelector('#rep-start')?.value || today;
             reportEnd = container.querySelector('#rep-end')?.value || today;
             loadAll();
+        });
+
+        container.querySelectorAll('[data-rep-preset]').forEach((btn) =>
+            btn.addEventListener('click', () => {
+                const preset = btn.getAttribute('data-rep-preset');
+                if (preset === 'today') {
+                    reportStart = today;
+                    reportEnd = today;
+                } else if (preset === '7d') {
+                    reportStart = shiftWibDate(today, -6);
+                    reportEnd = today;
+                } else if (preset === 'month') {
+                    reportStart = `${today.slice(0, 8)}01`;
+                    reportEnd = today;
+                }
+                loadAll();
+            })
+        );
+
+        container.querySelectorAll('[data-exp-status]').forEach((btn) =>
+            btn.addEventListener('click', () => {
+                expenseStatusFilter = btn.getAttribute('data-exp-status') || 'all';
+                render();
+            })
+        );
+
+        container.querySelector('#exp-nominal')?.addEventListener('input', (e) => {
+            const previewEl = container.querySelector('#exp-preview-nominal');
+            if (previewEl) {
+                const val = Number(e.target.value || 0);
+                previewEl.textContent = val > 0 ? `- ${formatRupiah(val)}` : '- Rp 0';
+            }
         });
 
         container.querySelectorAll('[data-edit-exp]').forEach((b) =>

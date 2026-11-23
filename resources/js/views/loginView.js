@@ -1,79 +1,134 @@
 import { washnoteApi } from '../api/client.js';
 import { setAuthenticatedSession } from '../state/store.js';
-import { escapeHtml, renderErrorAlert } from '../utils/formatters.js';
+import { escapeHtml, iconSvg, renderErrorAlert } from '../utils/formatters.js';
 
 export function mountLoginView(container, authNotice, onLoggedIn) {
     let isLoading = false;
+    let verifiedRoleLabel = null;
     let errorObj = null;
+    let fieldErrors = {};
+    let showPassword = false;
 
     function render() {
         container.innerHTML = `
             <div class="flex min-h-screen flex-col justify-center bg-slate-100 px-4 py-10 sm:px-6">
                 <div class="mx-auto w-full max-w-md">
                     <div class="mb-6 text-center">
-                        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-700 text-lg font-bold text-white shadow-sm">
+                        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-lg font-bold text-white shadow-sm">
                             WN
                         </div>
-                        <h1 class="text-2xl font-bold tracking-tight text-slate-900">WashNote POS</h1>
-                        <p class="mt-0.5 text-xs font-semibold tracking-wider text-slate-500">GALIROSO WASH</p>
+                        <p class="text-xs font-semibold tracking-widest text-slate-500">GALIROSO WASH POS</p>
+                        <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-900">Selamat Datang</h1>
+                        <p class="mt-1 text-sm text-slate-600">Masuk untuk melanjutkan.</p>
                     </div>
 
                     <div class="wn-card p-6 shadow-sm sm:p-8">
-                        <h2 class="text-lg font-bold text-slate-900">Masuk</h2>
+                        ${verifiedRoleLabel ? `
+                            <div class="mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-800" role="status">
+                                ${iconSvg('checkCircle', 'h-4 w-4 text-emerald-600')}
+                                <span>Terverifikasi sebagai ${escapeHtml(verifiedRoleLabel)}</span>
+                            </div>
+                        ` : ''}
 
-                        ${authNotice ? `
-                            <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="status">
+                        ${authNotice && !verifiedRoleLabel ? `
+                            <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800" role="status">
                                 ${escapeHtml(authNotice)}
                             </div>
                         ` : ''}
 
-                        ${errorObj ? `<div class="mt-4">${renderErrorAlert(errorObj)}</div>` : ''}
+                        ${errorObj ? `<div class="mb-4">${renderErrorAlert(errorObj)}</div>` : ''}
 
-                        <form id="login-form" class="mt-5 space-y-4">
+                        <form id="login-form" novalidate class="space-y-4">
                             <div>
-                                <label for="login-username" class="wn-label">Username</label>
-                                <input
-                                    id="login-username"
-                                    name="username"
-                                    type="text"
-                                    required
-                                    autocomplete="username"
-                                    placeholder="Masukkan username"
-                                    class="wn-input"
-                                />
+                                <label for="login-username" class="wn-label">Username <span class="text-rose-600">*</span></label>
+                                <div class="relative">
+                                    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                                        ${iconSvg('user', 'h-4 w-4')}
+                                    </span>
+                                    <input
+                                        id="login-username"
+                                        name="username"
+                                        type="text"
+                                        required
+                                        autocomplete="username"
+                                        placeholder="Masukkan username"
+                                        class="wn-input pl-9 ${fieldErrors.username ? 'border-rose-500 focus:border-rose-600 focus:ring-rose-500/20' : ''}"
+                                    />
+                                </div>
+                                ${fieldErrors.username ? `
+                                    <p class="mt-1.5 flex items-center gap-1 text-xs font-medium text-rose-600">
+                                        ${iconSvg('alertCircle', 'h-3.5 w-3.5')}
+                                        <span>${escapeHtml(fieldErrors.username)}</span>
+                                    </p>
+                                ` : ''}
                             </div>
 
                             <div>
-                                <label for="login-password" class="wn-label">Kata Sandi</label>
-                                <input
-                                    id="login-password"
-                                    name="password"
-                                    type="password"
-                                    required
-                                    autocomplete="current-password"
-                                    placeholder="Masukkan kata sandi"
-                                    class="wn-input"
-                                />
+                                <label for="login-password" class="wn-label">Kata Sandi <span class="text-rose-600">*</span></label>
+                                <div class="relative">
+                                    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                                        ${iconSvg('lock', 'h-4 w-4')}
+                                    </span>
+                                    <input
+                                        id="login-password"
+                                        name="password"
+                                        type="${showPassword ? 'text' : 'password'}"
+                                        required
+                                        autocomplete="current-password"
+                                        placeholder="Masukkan kata sandi"
+                                        class="wn-input pl-9 pr-10 ${fieldErrors.password ? 'border-rose-500 focus:border-rose-600 focus:ring-rose-500/20' : ''}"
+                                    />
+                                    <button
+                                        id="login-toggle-pass"
+                                        type="button"
+                                        tabindex="-1"
+                                        aria-label="Tampilkan atau sembunyikan kata sandi"
+                                        class="absolute inset-y-0 right-2.5 flex items-center text-slate-400 hover:text-slate-600"
+                                    >
+                                        ${iconSvg(showPassword ? 'eyeOff' : 'eye', 'h-4 w-4')}
+                                    </button>
+                                </div>
+                                ${fieldErrors.password ? `
+                                    <p class="mt-1.5 flex items-center gap-1 text-xs font-medium text-rose-600">
+                                        ${iconSvg('alertCircle', 'h-3.5 w-3.5')}
+                                        <span>${escapeHtml(fieldErrors.password)}</span>
+                                    </p>
+                                ` : ''}
                             </div>
 
                             <button
                                 type="submit"
                                 id="login-submit"
-                                ${isLoading ? 'disabled' : ''}
-                                class="wn-btn-primary w-full"
+                                ${isLoading || Boolean(verifiedRoleLabel) ? 'disabled' : ''}
+                                class="wn-btn-primary w-full gap-2"
                             >
-                                ${isLoading ? 'Memverifikasi...' : 'Masuk'}
+                                ${isLoading ? '<span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>' : ''}
+                                <span>${verifiedRoleLabel ? 'Berhasil Masuk...' : isLoading ? 'Memverifikasi...' : 'Masuk'}</span>
                             </button>
                         </form>
                     </div>
+
+                    <p class="mt-6 text-center text-xs text-slate-400">Sistem POS Internal • Akses Khusus Staf & Pemilik</p>
                 </div>
             </div>
         `;
 
+        const passInput = container.querySelector('#login-password');
+        const toggleBtn = container.querySelector('#login-toggle-pass');
+        toggleBtn?.addEventListener('click', () => {
+            showPassword = !showPassword;
+            if (passInput) {
+                passInput.type = showPassword ? 'text' : 'password';
+            }
+            if (toggleBtn) {
+                toggleBtn.innerHTML = iconSvg(showPassword ? 'eyeOff' : 'eye', 'h-4 w-4');
+            }
+        });
+
         const form = container.querySelector('#login-form');
         form?.addEventListener('submit', async (event) => {
             event.preventDefault();
-            if (isLoading) {
+            if (isLoading || verifiedRoleLabel) {
                 return;
             }
 
@@ -82,6 +137,26 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
             const username = usernameInput?.value?.trim() || '';
             const password = passwordInput?.value || '';
 
+            const nextFieldErrors = {};
+            if (username === '') {
+                nextFieldErrors.username = 'Username wajib diisi.';
+            }
+            if (password === '') {
+                nextFieldErrors.password = 'Kata sandi wajib diisi.';
+            }
+
+            if (Object.keys(nextFieldErrors).length > 0) {
+                fieldErrors = nextFieldErrors;
+                errorObj = null;
+                render();
+                const restoredUsername = container.querySelector('#login-username');
+                if (restoredUsername) {
+                    restoredUsername.value = username;
+                }
+                return;
+            }
+
+            fieldErrors = {};
             isLoading = true;
             errorObj = null;
             render();
@@ -96,7 +171,10 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
                 }
 
                 setAuthenticatedSession(token, user);
-                onLoggedIn();
+                isLoading = false;
+                verifiedRoleLabel = user.peran === 'owner' ? 'Owner' : 'Kasir';
+                render();
+                window.setTimeout(() => onLoggedIn(), 200);
             } catch (err) {
                 errorObj = err;
                 isLoading = false;

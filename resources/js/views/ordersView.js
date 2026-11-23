@@ -147,6 +147,8 @@ export function mountOrdersListView(container) {
                                 </thead>
                                 <tbody class="divide-y divide-slate-200 bg-white">
                                     ${items.map((order) => {
+                                        const isCancelled = order.status_pesanan === 'dibatalkan';
+                                        const isPaid = order.pembayaran?.status_pembayaran === 'sudah_dibayar';
                                         const plates = (order.kendaraan || [])
                                             .map((v) => `${escapeHtml(v.nama_kategori_snapshot)}${v.plat_nomor ? ` (${escapeHtml(v.plat_nomor)})` : ''}`)
                                             .join(', ');
@@ -154,24 +156,46 @@ export function mountOrdersListView(container) {
                                         return `
                                             <tr class="hover:bg-slate-50">
                                                 <td class="px-4 py-3">
-                                                    <div class="font-mono font-bold text-slate-900">${escapeHtml(order.nomor_nota || `#${order.id_pesanan}`)}</div>
+                                                    <div class="font-mono font-bold ${isCancelled ? 'text-slate-400 line-through' : 'text-slate-900'}">${escapeHtml(order.nomor_nota || `#${order.id_pesanan}`)}</div>
                                                     <div class="text-xs text-slate-500">${escapeHtml(formatDateTimeWib(order.waktu_pesanan))}</div>
                                                 </td>
                                                 <td class="px-4 py-3">
                                                     <div class="text-xs font-medium text-slate-800">${plates || '-'}</div>
                                                     ${order.catatan ? `<div class="mt-0.5 text-xs text-slate-500">${escapeHtml(order.catatan)}</div>` : ''}
+                                                    ${isCancelled && order.alasan_pembatalan ? `<div class="mt-1 text-xs font-medium text-rose-700">Alasan batal: ${escapeHtml(order.alasan_pembatalan)}</div>` : ''}
                                                 </td>
                                                 <td class="px-4 py-3">${badgePesanan(order.status_pesanan)}</td>
                                                 <td class="px-4 py-3">${badgePembayaran(order.pembayaran?.status_pembayaran || 'belum_dibayar')}</td>
-                                                <td class="px-4 py-3 text-right font-bold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(order.total_harga))}</td>
-                                                <td class="px-4 py-3 text-right">
+                                                <td class="px-4 py-3 text-right font-bold tabular-nums ${isCancelled ? 'text-slate-400 line-through' : 'text-slate-900'}">${escapeHtml(formatRupiah(order.total_harga))}</td>
+                                                <td class="px-4 py-3 text-right whitespace-nowrap space-x-1.5">
                                                     <button
                                                         type="button"
                                                         data-view-order="${order.id_pesanan}"
-                                                        class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                                        data-view-tab="detail"
+                                                        class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                                                     >
-                                                        Kelola
+                                                        Detail
                                                     </button>
+                                                    ${!isCancelled ? `
+                                                        <button
+                                                            type="button"
+                                                            data-view-order="${order.id_pesanan}"
+                                                            data-view-tab="edit"
+                                                            class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-50"
+                                                        >
+                                                            Ubah
+                                                        </button>
+                                                    ` : ''}
+                                                    ${!isCancelled && !isPaid ? `
+                                                        <button
+                                                            type="button"
+                                                            data-view-order="${order.id_pesanan}"
+                                                            data-view-tab="payment"
+                                                            class="rounded-lg bg-teal-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-800"
+                                                        >
+                                                            Bayar
+                                                        </button>
+                                                    ` : ''}
                                                 </td>
                                             </tr>
                                         `;
@@ -215,7 +239,7 @@ export function mountOrdersListView(container) {
             btn.addEventListener('click', () => {
                 navigateTo(APP_VIEWS.ORDER_DETAIL, {
                     orderId: Number(btn.getAttribute('data-view-order')),
-                    tab: 'detail',
+                    tab: btn.getAttribute('data-view-tab') || 'detail',
                 });
             });
         });
@@ -511,8 +535,8 @@ export function mountOrderCreateView(container) {
                         </div>
 
                         <div class="space-y-4">
-                            <div class="sticky top-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <h2 class="text-base font-bold text-slate-900">Ringkasan Tagihan</h2>
+                            <div class="wn-card sticky top-6 p-5">
+                                <h2 class="text-base font-bold text-slate-900">Ringkasan Pesanan</h2>
                                 <dl class="mt-4 space-y-2.5 border-b border-slate-200 pb-4 text-sm">
                                     <div class="flex justify-between text-slate-600">
                                         <dt>Jumlah Kendaraan</dt>
@@ -532,20 +556,29 @@ export function mountOrderCreateView(container) {
                                     <span class="text-xl font-bold text-teal-700 tabular-nums">${escapeHtml(formatRupiah(preview.total))}</span>
                                 </div>
 
+                                <p class="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                                    Pesanan baru tercatat berstatus <strong>Belum Dibayar</strong>; pelunasan dilakukan di halaman Detail Pesanan.
+                                </p>
+
                                 ${scheduleStatus?.perlu_konfirmasi_hari_libur ? `
-                                    <label class="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                                    <label class="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                                         <input id="create-order-holiday-confirm" type="checkbox" ${konfirmasiHariLibur ? 'checked' : ''} class="mt-0.5 rounded border-amber-400 text-amber-700 focus:ring-amber-600" />
                                         <span>Saya mengonfirmasi pembuatan pesanan pada hari libur operasional.</span>
                                     </label>
                                 ` : ''}
 
-                                <button
-                                    type="submit"
-                                    ${isSubmitting ? 'disabled' : ''}
-                                    class="mt-5 flex w-full items-center justify-center rounded-xl bg-teal-700 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 disabled:opacity-60"
-                                >
-                                    ${isSubmitting ? 'Menyimpan Pesanan...' : 'Simpan Pesanan'}
-                                </button>
+                                <div class="mt-5 space-y-2">
+                                    <button
+                                        type="submit"
+                                        ${isSubmitting ? 'disabled' : ''}
+                                        class="wn-btn-primary w-full py-2.5"
+                                    >
+                                        ${isSubmitting ? 'Menyimpan Pesanan...' : 'Simpan Pesanan'}
+                                    </button>
+                                    <button id="create-cancel-btn" type="button" class="wn-btn-secondary w-full">
+                                        Batal
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </form>
@@ -572,7 +605,7 @@ export function mountOrderCreateView(container) {
 
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="wn-label">Kategori Kendaraan</label>
+                        <label class="wn-label">Kategori Kendaraan <span class="text-rose-600">*</span></label>
                         <select data-veh-cat="${vIdx}" class="wn-select">
                             ${catalog.kategori_kendaraan.map((kat) => `
                                 <option value="${kat.id_kategori_kendaraan}" ${Number(kat.id_kategori_kendaraan) === Number(veh.id_kategori_kendaraan) ? 'selected' : ''}>
@@ -582,14 +615,14 @@ export function mountOrderCreateView(container) {
                         </select>
                     </div>
                     <div>
-                        <label class="mb-1 block text-xs font-semibold text-slate-700">Plat Nomor (Opsional)</label>
+                        <label class="wn-label">Plat Nomor <span class="font-normal text-slate-400">(Opsional)</span></label>
                         <input
                             type="text"
                             maxlength="20"
                             data-veh-plat="${vIdx}"
                             value="${escapeHtml(veh.plat_nomor)}"
                             placeholder="Mis. B 1234 XYZ"
-                            class="block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm uppercase focus:border-teal-600 focus:outline-none"
+                            class="wn-input uppercase"
                         />
                     </div>
                 </div>
@@ -621,7 +654,7 @@ export function mountOrderCreateView(container) {
                             <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5">
                                 <div class="grid gap-3 sm:grid-cols-12">
                                     <div class="sm:col-span-6">
-                                        <label class="wn-label">Pilih Layanan</label>
+                                        <label class="wn-label">Pilih Layanan <span class="text-rose-600">*</span></label>
                                         <select data-line-tariff="${vIdx}-${lIdx}" class="wn-select">
                                             ${mainTariffs.length > 0 ? `<optgroup label="Layanan Utama">${mainTariffs.map((t) => `
                                                 <option value="${t.id_harga}" ${Number(t.id_harga) === Number(line.id_harga) ? 'selected' : ''}>
@@ -637,8 +670,8 @@ export function mountOrderCreateView(container) {
                                     </div>
 
                                     <div class="sm:col-span-5">
-                                        <label class="mb-1 block text-xs font-medium text-slate-600">
-                                            Harga Akhir (Rentang ${escapeHtml(formatRupiah(minPrice))} – ${escapeHtml(formatRupiah(maxPrice))})
+                                        <label class="wn-label">
+                                            Harga Akhir <span class="text-rose-600">*</span> <span class="font-normal text-slate-500">(${escapeHtml(formatRupiah(minPrice))} – ${escapeHtml(formatRupiah(maxPrice))})</span>
                                         </label>
                                         <input
                                             type="number"
@@ -646,7 +679,7 @@ export function mountOrderCreateView(container) {
                                             step="1"
                                             data-line-price="${vIdx}-${lIdx}"
                                             value="${escapeHtml(line.harga_akhir)}"
-                                            class="block w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm tabular-nums focus:border-teal-600 focus:outline-none"
+                                            class="wn-input tabular-nums"
                                         />
                                     </div>
 
@@ -676,6 +709,7 @@ export function mountOrderCreateView(container) {
 
     function bindCreateEvents() {
         container.querySelector('#create-back-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.DASHBOARD));
+        container.querySelector('#create-cancel-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.DASHBOARD));
         container.querySelector('#create-go-dash-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.DASHBOARD));
         container.querySelector('#create-open-catalog-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.OWNER_CATALOG));
         container.querySelector('#create-reload-catalog-btn')?.addEventListener('click', () => loadInitialData());
