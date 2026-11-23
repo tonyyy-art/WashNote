@@ -1,5 +1,6 @@
 import { washnoteApi } from '../api/client.js';
-import { showToast } from '../state/store.js';
+import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
+import { APP_VIEWS, navigateTo, showToast } from '../state/store.js';
 import {
     badgeStatusAktif,
     escapeHtml,
@@ -11,6 +12,7 @@ import {
 } from '../utils/formatters.js';
 
 export function mountOwnerCatalogView(container) {
+    const motion = createViewMotion(container);
     let activeTab = 'categories';
     let isLoading = true;
     let isSubmitting = false;
@@ -43,6 +45,7 @@ export function mountOwnerCatalogView(container) {
         } finally {
             isLoading = false;
             render();
+            motion.runIntro();
         }
     }
 
@@ -51,7 +54,11 @@ export function mountOwnerCatalogView(container) {
 
         container.innerHTML = `
             <div class="space-y-5">
-                ${renderPageHeader({ title: 'Katalog & Tarif Layanan' })}
+                ${renderPageHeader({
+                    backBtnId: 'cat-back-btn',
+                    backLabel: '← Kembali ke Akun',
+                    title: 'Katalog & Tarif Layanan',
+                })}
 
                 ${errorObj && hasAnyData ? renderErrorAlert(errorObj) : ''}
 
@@ -61,7 +68,7 @@ export function mountOwnerCatalogView(container) {
                         ['services', `Layanan (${services.length})`],
                         ['tariffs', `Tarif & Batas Harga (${tariffs.length})`],
                     ].map(([tab, label]) => `
-                        <button type="button" data-cat-tab="${tab}" class="min-h-[38px] rounded-lg px-3.5 py-2 text-xs font-semibold transition ${activeTab === tab ? 'bg-brand-navy text-white shadow-xs' : 'bg-surface text-ink-muted ring-1 ring-border-subtle hover:bg-app-bg hover:text-ink'}">
+                        <button type="button" data-cat-tab="${tab}" class="min-h-[38px] rounded-lg px-3.5 py-2 text-xs font-semibold transition active:scale-[0.985] ${activeTab === tab ? 'bg-brand-navy text-white shadow-xs' : 'bg-surface text-ink-muted ring-1 ring-border-subtle hover:bg-app-bg hover:text-ink'}">
                             ${escapeHtml(label)}
                         </button>
                     `).join('')}
@@ -75,13 +82,16 @@ export function mountOwnerCatalogView(container) {
                         actionsHtml: '<button id="cat-retry-btn" type="button" class="wn-btn-secondary">Coba Lagi</button>',
                     })}
                 ` : ''}
-                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'categories' ? renderCategoriesTab() : ''}
-                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'services' ? renderServicesTab() : ''}
-                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'tariffs' ? renderTariffsTab() : ''}
+                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'categories' ? `<div data-motion-tabpanel>${renderCategoriesTab()}</div>` : ''}
+                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'services' ? `<div data-motion-tabpanel>${renderServicesTab()}</div>` : ''}
+                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'tariffs' ? `<div data-motion-tabpanel>${renderTariffsTab()}</div>` : ''}
             </div>
         `;
 
         bindEvents();
+        if (!isLoading) {
+            motion.refresh();
+        }
     }
 
     function renderCategoriesTab() {
@@ -89,7 +99,7 @@ export function mountOwnerCatalogView(container) {
 
         return `
             <div class="grid gap-6 lg:grid-cols-3">
-                <div class="wn-card overflow-hidden lg:col-span-2">
+                <div class="wn-card min-w-0 overflow-hidden lg:col-span-2">
                     ${categories.length === 0 ? `
                         <div class="p-4">
                             ${renderEmptyState({
@@ -110,7 +120,7 @@ export function mountOwnerCatalogView(container) {
                                         ${badgeStatusAktif(Boolean(cat.status_aktif))}
                                     </div>
                                     <div class="flex flex-wrap gap-2">
-                                        <button type="button" data-edit-cat-row="${cat.id_kategori_kendaraan}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Ubah</button>
+                                        <button type="button" data-edit-cat-row="${cat.id_kategori_kendaraan}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
                                         ${cat.status_aktif ? `<button type="button" data-del-cat-row="${cat.id_kategori_kendaraan}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
                                     </div>
                                 </div>
@@ -175,7 +185,7 @@ export function mountOwnerCatalogView(container) {
 
         return `
             <div class="grid gap-6 lg:grid-cols-3">
-                <div class="wn-card overflow-hidden lg:col-span-2">
+                <div class="wn-card min-w-0 overflow-hidden lg:col-span-2">
                     ${services.length === 0 ? `
                         <div class="p-4">
                             ${renderEmptyState({
@@ -193,12 +203,12 @@ export function mountOwnerCatalogView(container) {
                                             <p class="font-semibold text-ink">${escapeHtml(srv.nama_layanan)}</p>
                                             ${srv.deskripsi ? `<p class="text-xs text-ink-muted">${escapeHtml(srv.deskripsi)}</p>` : ''}
                                         </div>
-                                        <span class="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase ${srv.tipe_layanan === 'tambahan' ? 'bg-slate-100 text-brand-navy' : 'bg-primary-soft text-primary'}">${escapeHtml(srv.tipe_layanan || 'utama')}</span>
+                                        <span class="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase ${srv.tipe_layanan === 'tambahan' ? 'bg-slate-100 text-brand-navy' : 'bg-accent-soft text-accent'}">${escapeHtml(srv.tipe_layanan || 'utama')}</span>
                                     </div>
                                     <div class="flex flex-wrap items-center justify-between gap-2">
                                         ${badgeStatusAktif(Boolean(srv.status_aktif))}
                                         <div class="flex flex-wrap gap-2">
-                                            <button type="button" data-edit-srv-row="${srv.id_layanan}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Ubah</button>
+                                            <button type="button" data-edit-srv-row="${srv.id_layanan}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
                                             ${srv.status_aktif ? `<button type="button" data-del-srv-row="${srv.id_layanan}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
                                         </div>
                                     </div>
@@ -223,7 +233,7 @@ export function mountOwnerCatalogView(container) {
                                                 ${srv.deskripsi ? `<div class="text-xs text-ink-muted">${escapeHtml(srv.deskripsi)}</div>` : ''}
                                             </td>
                                             <td class="px-4 py-3">
-                                                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase ${srv.tipe_layanan === 'tambahan' ? 'bg-slate-100 text-brand-navy' : 'bg-primary-soft text-primary'}">${escapeHtml(srv.tipe_layanan || 'utama')}</span>
+                                                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase ${srv.tipe_layanan === 'tambahan' ? 'bg-slate-100 text-brand-navy' : 'bg-accent-soft text-accent'}">${escapeHtml(srv.tipe_layanan || 'utama')}</span>
                                             </td>
                                             <td class="px-4 py-3">${badgeStatusAktif(Boolean(srv.status_aktif))}</td>
                                             <td class="px-4 py-3 text-right space-x-2.5">
@@ -274,7 +284,7 @@ export function mountOwnerCatalogView(container) {
 
         return `
             <div class="grid gap-6 lg:grid-cols-3">
-                <div class="wn-card overflow-hidden lg:col-span-2">
+                <div class="wn-card min-w-0 overflow-hidden lg:col-span-2">
                     ${tariffs.length === 0 ? `
                         <div class="p-4">
                             ${renderEmptyState({
@@ -301,7 +311,7 @@ export function mountOwnerCatalogView(container) {
                                         <span class="text-ink-muted tabular-nums">Rentang: ${escapeHtml(formatRupiah(tar.batas_bawah))} – ${escapeHtml(formatRupiah(tar.batas_atas))}</span>
                                     </div>
                                     <div class="flex flex-wrap gap-2">
-                                        <button type="button" data-edit-tar-row="${tar.id_harga}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Ubah</button>
+                                        <button type="button" data-edit-tar-row="${tar.id_harga}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
                                         ${tar.status_aktif ? `<button type="button" data-del-tar-row="${tar.id_harga}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
                                     </div>
                                 </div>
@@ -396,12 +406,14 @@ export function mountOwnerCatalogView(container) {
     }
 
     function bindEvents() {
+        container.querySelector('#cat-back-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.PROFILE));
         container.querySelector('#cat-retry-btn')?.addEventListener('click', loadCatalogMaster);
         container.querySelectorAll('[data-cat-tab]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 activeTab = btn.getAttribute('data-cat-tab');
                 errorObj = null;
                 render();
+                motion.animateTabPanel();
             });
         });
 
@@ -422,6 +434,7 @@ export function mountOwnerCatalogView(container) {
             b.addEventListener('click', () => {
                 editingCatId = Number(b.getAttribute('data-edit-cat-row'));
                 render();
+                scrollToElement('#cat-form');
             })
         );
         container.querySelectorAll('[data-del-cat-row]').forEach((b) =>
@@ -469,6 +482,7 @@ export function mountOwnerCatalogView(container) {
             b.addEventListener('click', () => {
                 editingSrvId = Number(b.getAttribute('data-edit-srv-row'));
                 render();
+                scrollToElement('#srv-form');
             })
         );
         container.querySelectorAll('[data-del-srv-row]').forEach((b) =>
@@ -517,6 +531,7 @@ export function mountOwnerCatalogView(container) {
             b.addEventListener('click', () => {
                 editingTariffId = Number(b.getAttribute('data-edit-tar-row'));
                 render();
+                scrollToElement('#tar-form');
             })
         );
         container.querySelectorAll('[data-del-tar-row]').forEach((b) =>

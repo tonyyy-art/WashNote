@@ -1,8 +1,10 @@
 import { washnoteApi } from '../api/client.js';
+import { createViewMotion } from '../motion/motionSystem.js';
 import { setAuthenticatedSession } from '../state/store.js';
 import { escapeHtml, iconSvg, renderErrorAlert } from '../utils/formatters.js';
 
 export function mountLoginView(container, authNotice, onLoggedIn) {
+    const motion = createViewMotion(container);
     let isLoading = false;
     let verifiedRoleLabel = null;
     let errorObj = null;
@@ -13,7 +15,7 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
         container.innerHTML = `
             <div class="flex min-h-screen flex-col justify-center bg-app-bg px-4 py-8 sm:px-6 sm:py-10">
                 <div class="mx-auto w-full max-w-md">
-                    <div class="mb-6 text-center">
+                    <div data-motion-card class="mb-6 text-center">
                         <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-navy text-lg font-bold text-white shadow-sm">
                             WN
                         </div>
@@ -22,7 +24,7 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
                         <p class="mt-1 text-sm text-ink-muted">Masuk untuk melanjutkan.</p>
                     </div>
 
-                    <div class="wn-card p-5 shadow-sm sm:p-8">
+                    <div data-motion-card class="wn-card p-5 shadow-sm sm:p-8">
                         ${verifiedRoleLabel ? `
                             <div class="mb-4 flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm font-medium text-success" role="status">
                                 ${iconSvg('checkCircle', 'h-4 w-4 text-success')}
@@ -188,4 +190,5 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
     }
 
     render();
+    motion.runIntro();
 }

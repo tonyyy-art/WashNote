@@ -1,4 +1,5 @@
 import { generateIdempotencyKey, washnoteApi } from '../api/client.js';
+import { createViewMotion } from '../motion/motionSystem.js';
 import { APP_VIEWS, isOwner, navigateTo, showToast } from '../state/store.js';
 import {
     badgeOperasional,
@@ -15,6 +16,7 @@ import {
 } from '../utils/formatters.js';
 
 export function mountOrdersListView(container) {
+    const motion = createViewMotion(container);
     let isLoading = true;
     let errorObj = null;
     let ordersPage = null;
@@ -44,6 +46,7 @@ export function mountOrdersListView(container) {
         } finally {
             isLoading = false;
             render();
+            motion.runIntro();
         }
     }
 
@@ -63,7 +66,7 @@ export function mountOrdersListView(container) {
                     actionsHtml: '<button id="orders-new-btn" type="button" class="wn-btn-primary">+ Buat Pesanan</button>',
                 })}
 
-                <div class="wn-card p-4">
+                <div data-motion-card class="wn-card p-4">
                     <form id="orders-filter-form" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6 lg:items-end">
                         <div class="sm:col-span-2 lg:col-span-2">
                             <label for="ord-search" class="wn-label">Nota / Plat Nomor</label>
@@ -110,7 +113,7 @@ export function mountOrdersListView(container) {
 
                 ${errorObj && items.length > 0 ? renderErrorAlert(errorObj) : ''}
 
-                <div class="wn-card overflow-hidden">
+                <div data-motion-reveal class="wn-card overflow-hidden">
                     ${isLoading ? renderLoadingState('Memuat daftar pesanan...') : errorObj && items.length === 0 ? `
                         <div class="p-4">
                             ${renderEmptyState({
@@ -147,7 +150,7 @@ export function mountOrdersListView(container) {
                                     .join(', ');
 
                                 return `
-                                    <div class="space-y-2.5 p-4">
+                                    <div class="wn-interactive-card space-y-2.5 p-4">
                                         <div class="flex items-start justify-between gap-2">
                                             <div>
                                                 <div class="font-mono text-sm font-bold ${isCancelled ? 'text-ink-muted line-through' : 'text-ink'}">${escapeHtml(order.nomor_nota || `#${order.id_pesanan}`)}</div>
@@ -176,7 +179,7 @@ export function mountOrdersListView(container) {
                                                     type="button"
                                                     data-view-order="${order.id_pesanan}"
                                                     data-view-tab="edit"
-                                                    class="inline-flex min-h-[36px] flex-1 items-center justify-center rounded-lg border border-primary-border bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary hover:bg-blue-100"
+                                                    class="inline-flex min-h-[36px] flex-1 items-center justify-center rounded-lg border border-accent-border bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent transition active:scale-[0.985] hover:bg-teal-100/70"
                                                 >
                                                     Ubah
                                                 </button>
@@ -244,7 +247,7 @@ export function mountOrdersListView(container) {
                                                             type="button"
                                                             data-view-order="${order.id_pesanan}"
                                                             data-view-tab="edit"
-                                                            class="rounded-lg border border-primary-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary-soft"
+                                                            class="rounded-lg border border-accent-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-accent transition hover:bg-accent-soft"
                                                         >
                                                             Ubah
                                                         </button>
@@ -254,7 +257,7 @@ export function mountOrdersListView(container) {
                                                             type="button"
                                                             data-view-order="${order.id_pesanan}"
                                                             data-view-tab="payment"
-                                                            class="rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-hover"
+                                                            class="rounded-lg bg-brand-navy px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-navy-hover"
                                                         >
                                                             Bayar
                                                         </button>
@@ -314,6 +317,7 @@ export function mountOrdersListView(container) {
 }
 
 export function mountOrderCreateView(container) {
+    const motion = createViewMotion(container);
     let isLoadingCatalog = true;
     let isSubmitting = false;
     let errorObj = null;
@@ -403,6 +407,7 @@ export function mountOrderCreateView(container) {
         } finally {
             isLoadingCatalog = false;
             render();
+            motion.runIntro();
         }
     }
 
@@ -567,13 +572,13 @@ export function mountOrderCreateView(container) {
                     })}
                 ` : `
                     <form id="create-order-form" class="grid gap-6 lg:grid-cols-3">
-                        <div class="space-y-4 lg:col-span-2">
+                        <div class="min-w-0 space-y-4 lg:col-span-2">
                             ${vehicles.map((veh, vIdx) => renderVehicleBuilder(veh, vIdx)).join('')}
 
                             <button
                                 id="add-vehicle-btn"
                                 type="button"
-                                class="flex min-h-[44px] w-full items-center justify-center rounded-2xl border-2 border-dashed border-border-subtle bg-surface px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary hover:bg-primary-soft/50"
+                                class="flex min-h-[44px] w-full items-center justify-center rounded-2xl border-2 border-dashed border-border-subtle bg-surface px-4 py-3 text-sm font-semibold text-accent transition active:scale-[0.99] hover:border-accent hover:bg-accent-soft/40"
                             >
                                 + Tambah Kendaraan Lain dalam Pesanan Ini
                             </button>
@@ -590,7 +595,7 @@ export function mountOrderCreateView(container) {
                         </div>
 
                         <div class="space-y-4">
-                            <div class="wn-card p-5 lg:sticky lg:top-6">
+                            <div data-motion-card class="wn-card p-5 lg:sticky lg:top-6">
                                 <h2 class="text-base font-bold text-ink">Ringkasan Pesanan</h2>
                                 <dl class="mt-4 space-y-2.5 border-b border-border-subtle pb-4 text-sm">
                                     <div class="flex justify-between text-ink-muted">
@@ -608,7 +613,7 @@ export function mountOrderCreateView(container) {
                                 </dl>
                                 <div class="mt-4 flex items-center justify-between">
                                     <span class="text-sm font-bold text-ink">Total Tagihan</span>
-                                    <span class="text-xl font-bold text-primary tabular-nums">${escapeHtml(formatRupiah(preview.total))}</span>
+                                    <span class="text-xl font-bold text-brand-navy tabular-nums">${escapeHtml(formatRupiah(preview.total))}</span>
                                 </div>
 
                                 <p class="mt-3 rounded-lg bg-app-bg px-3 py-2 text-xs text-ink-muted">
@@ -642,6 +647,9 @@ export function mountOrderCreateView(container) {
         `;
 
         bindCreateEvents();
+        if (!isLoadingCatalog) {
+            motion.refresh();
+        }
     }
 
     function renderVehicleBuilder(veh, vIdx) {
@@ -650,7 +658,7 @@ export function mountOrderCreateView(container) {
         const addOnTariffs = availableTariffs.filter((t) => t.layanan?.tipe_layanan === 'tambahan');
 
         return `
-            <div class="wn-card p-4 shadow-xs sm:p-5">
+            <div data-motion-card class="wn-card p-4 shadow-xs sm:p-5">
                 <div class="flex items-center justify-between border-b border-border-subtle pb-3">
                     <h3 class="text-sm font-bold text-ink">Kendaraan #${vIdx + 1}</h3>
                     ${vehicles.length > 1 ? `
@@ -689,7 +697,7 @@ export function mountOrderCreateView(container) {
                             type="button"
                             data-add-service="${vIdx}"
                             ${availableTariffs.length === 0 ? 'disabled' : ''}
-                            class="inline-flex min-h-[34px] items-center rounded-lg border border-primary-border bg-primary-soft px-3 py-1 text-xs font-semibold text-primary hover:bg-blue-100 disabled:opacity-50"
+                            class="inline-flex min-h-[34px] items-center rounded-lg border border-accent-border bg-accent-soft px-3 py-1 text-xs font-semibold text-accent transition active:scale-[0.98] hover:bg-teal-100/70 disabled:opacity-50"
                         >
                             + Tambah Layanan
                         </button>
@@ -750,8 +758,8 @@ export function mountOrderCreateView(container) {
                                         type="text"
                                         data-line-reason="${vIdx}-${lIdx}"
                                         value="${escapeHtml(line.alasan_penyesuaian)}"
-                                        placeholder="${isAdjusted ? 'Wajib diisi karena harga berbeda dari harga dasar' : 'Alasan penyesuaian harga (diisi jika harga akhir diubah)'}"
-                                        class="block min-h-[36px] w-full rounded-lg border ${isAdjusted ? 'border-amber-400 bg-amber-50/70' : 'border-border-subtle bg-surface'} px-3 py-1.5 text-xs text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
+                                        placeholder="${isAdjusted ? 'Wajib diisi karena harga berbeda dari harga dasar' : 'Alasan penyesuaian (jika harga diubah)'}"
+                                        class="block min-h-[36px] w-full rounded-lg border ${isAdjusted ? 'border-amber-400 bg-amber-50/70' : 'border-border-subtle bg-surface'} px-3 py-1.5 text-xs text-ink focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-navy/15"
                                     />
                                 </div>
                             </div>

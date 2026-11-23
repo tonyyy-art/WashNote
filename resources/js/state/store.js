@@ -20,12 +20,12 @@ const VIEW_PATHS = {
     [APP_VIEWS.OPERATING_HOURS]: '/jam-operasional',
     [APP_VIEWS.OWNER_CATALOG]: '/katalog-layanan',
     [APP_VIEWS.OWNER_STAFF]: '/kelola-kasir',
-    [APP_VIEWS.OWNER_FINANCE]: '/keuangan',
+    [APP_VIEWS.OWNER_FINANCE]: '/laporan',
     [APP_VIEWS.OWNER_AUDIT]: '/riwayat-audit',
     [APP_VIEWS.PROFILE]: '/profil',
 };
 
-export function resolveViewFromPath(pathname) {
+export function resolveViewFromPath(pathname, search = typeof window !== 'undefined' ? window.location.search : '') {
     const clean = (pathname || '/').replace(/\/+$/, '') || '/';
 
     if (clean === '/pesanan/baru') {
@@ -37,6 +37,21 @@ export function resolveViewFromPath(pathname) {
         return { view: APP_VIEWS.ORDER_DETAIL, options: { orderId: Number(detailMatch[1]) } };
     }
 
+    if (clean === '/pengeluaran') {
+        return { view: APP_VIEWS.OWNER_FINANCE, options: { financeTab: 'expenses' } };
+    }
+
+    if (clean === '/laporan') {
+        return { view: APP_VIEWS.OWNER_FINANCE, options: { financeTab: 'reports' } };
+    }
+
+    if (clean === '/keuangan') {
+        const params = new URLSearchParams(search || '');
+        const tabParam = params.get('tab');
+        const financeTab = ['reports', 'expenses', 'categories'].includes(tabParam) ? tabParam : 'reports';
+        return { view: APP_VIEWS.OWNER_FINANCE, options: { financeTab } };
+    }
+
     for (const [view, path] of Object.entries(VIEW_PATHS)) {
         if (path === clean) {
             return { view, options: {} };
@@ -46,23 +61,34 @@ export function resolveViewFromPath(pathname) {
     return { view: APP_VIEWS.DASHBOARD, options: {} };
 }
 
-function buildPathForView(view, orderId = null) {
+function buildPathForView(view, orderId = null, financeTab = 'reports') {
     if (view === APP_VIEWS.ORDER_DETAIL && orderId) {
         return `/pesanan/${orderId}`;
+    }
+
+    if (view === APP_VIEWS.OWNER_FINANCE) {
+        if (financeTab === 'expenses') {
+            return '/pengeluaran';
+        }
+        if (financeTab === 'categories') {
+            return '/keuangan?tab=categories';
+        }
+        return '/laporan';
     }
 
     return VIEW_PATHS[view] || '/';
 }
 
-function syncBrowserUrl(view, orderId = null, replace = false) {
+function syncBrowserUrl(view, orderId = null, replace = false, financeTab = 'reports') {
     if (typeof window === 'undefined' || !window.history) {
         return;
     }
 
-    const targetPath = buildPathForView(view, orderId);
-    if (window.location.pathname !== targetPath) {
+    const targetUrl = buildPathForView(view, orderId, financeTab);
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (currentUrl !== targetUrl) {
         const fn = replace ? 'replaceState' : 'pushState';
-        window.history[fn]({ view, orderId }, '', targetPath);
+        window.history[fn]({ view, orderId, financeTab }, '', targetUrl);
     }
 }
 
@@ -72,13 +98,14 @@ export const state = {
     activeView: APP_VIEWS.DASHBOARD,
     selectedOrderId: null,
     selectedOrderInitialTab: 'detail',
+    selectedFinanceTab: 'reports',
     authNotice: null,
     toast: null,
-    mobileMenuOpen: false,
 };
 
 let onStateChange = () => {};
 let onToastChange = () => {};
+let onNavSync = () => {};
 
 export function subscribeStateChange(callback) {
     onStateChange = callback;
@@ -88,12 +115,22 @@ export function subscribeToastChange(callback) {
     onToastChange = callback;
 }
 
+export function subscribeNavSync(callback) {
+    onNavSync = callback;
+}
+
 export function notifyRender() {
     onStateChange();
 }
 
 export function notifyToastRender() {
     onToastChange();
+}
+
+export function syncFinanceTabUrl(financeTab, replace = false) {
+    state.selectedFinanceTab = financeTab;
+    syncBrowserUrl(APP_VIEWS.OWNER_FINANCE, null, replace, financeTab);
+    onNavSync();
 }
 
 export function isOwner() {
@@ -112,6 +149,7 @@ export function resetSession(notice = null) {
     state.token = null;
     state.user = null;
     state.selectedOrderId = null;
+    state.selectedFinanceTab = 'reports';
     state.activeView = APP_VIEWS.DASHBOARD;
     state.authNotice = notice;
     syncBrowserUrl(APP_VIEWS.DASHBOARD, null, true);
@@ -145,14 +183,12 @@ export function navigateTo(view, options = {}) {
     if (ownerOnlyViews.has(view) && !isOwner()) {
         showToast('Anda tidak memiliki hak akses ke halaman khusus Owner.', 'error');
         state.activeView = APP_VIEWS.DASHBOARD;
-        state.mobileMenuOpen = false;
         syncBrowserUrl(APP_VIEWS.DASHBOARD, null, true);
         notifyRender();
         return;
     }
 
     state.activeView = view;
-    state.mobileMenuOpen = false;
 
     if (options.orderId !== undefined) {
         state.selectedOrderId = options.orderId;
@@ -162,6 +198,10 @@ export function navigateTo(view, options = {}) {
         state.selectedOrderInitialTab = options.tab;
     }
 
-    syncBrowserUrl(view, state.selectedOrderId, Boolean(options.replaceUrl));
+    if (view === APP_VIEWS.OWNER_FINANCE) {
+        state.selectedFinanceTab = options.financeTab || state.selectedFinanceTab || 'reports';
+    }
+
+    syncBrowserUrl(view, state.selectedOrderId, Boolean(options.replaceUrl), state.selectedFinanceTab);
     notifyRender();
 }

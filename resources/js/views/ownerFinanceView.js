@@ -1,5 +1,6 @@
 import { generateIdempotencyKey, washnoteApi } from '../api/client.js';
-import { showToast } from '../state/store.js';
+import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
+import { showToast, state, syncFinanceTabUrl } from '../state/store.js';
 import {
     badgeStatusAktif,
     escapeHtml,
@@ -15,7 +16,8 @@ import {
 } from '../utils/formatters.js';
 
 export function mountOwnerFinanceView(container) {
-    let activeTab = 'reports';
+    const motion = createViewMotion(container);
+    let activeTab = state.selectedFinanceTab || 'reports';
     let isLoading = true;
     let isSubmitting = false;
     let errorObj = null;
@@ -57,6 +59,7 @@ export function mountOwnerFinanceView(container) {
         } finally {
             isLoading = false;
             render();
+            motion.runIntro();
         }
     }
 
@@ -89,13 +92,16 @@ export function mountOwnerFinanceView(container) {
                         actionsHtml: '<button id="fin-retry-btn" type="button" class="wn-btn-secondary">Coba Lagi</button>',
                     })}
                 ` : ''}
-                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'reports' ? renderReportsTab() : ''}
-                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'expenses' ? renderExpensesTab() : ''}
-                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'categories' ? renderExpenseCategoriesTab() : ''}
+                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'reports' ? `<div data-motion-tabpanel>${renderReportsTab()}</div>` : ''}
+                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'expenses' ? `<div data-motion-tabpanel>${renderExpensesTab()}</div>` : ''}
+                ${!isLoading && !(errorObj && !hasAnyData) && activeTab === 'categories' ? `<div data-motion-tabpanel>${renderExpenseCategoriesTab()}</div>` : ''}
             </div>
         `;
 
         bindEvents();
+        if (!isLoading) {
+            motion.refresh();
+        }
     }
 
     function shiftWibDate(baseYmd, deltaDays) {
@@ -118,7 +124,7 @@ export function mountOwnerFinanceView(container) {
 
         return `
             <div class="space-y-5">
-                <form id="report-filter-form" class="wn-card flex flex-col gap-3 p-4 lg:flex-row lg:items-end lg:justify-between">
+                <form id="report-filter-form" data-motion-card class="wn-card flex flex-col gap-3 p-4 lg:flex-row lg:items-end lg:justify-between">
                     <div class="grid gap-3 sm:grid-cols-3 sm:items-end">
                         <div>
                             <label for="rep-start" class="wn-label">Tanggal Mulai</label>
@@ -139,24 +145,24 @@ export function mountOwnerFinanceView(container) {
 
                 ${reportSummary ? `
                     <div class="grid gap-4 lg:grid-cols-3">
-                        <div class="wn-card-navy p-5">
+                        <div data-motion-card class="wn-card-navy wn-interactive-card p-5">
                             <p class="text-xs font-medium text-blue-100/90">Selisih Pendapatan & Pengeluaran</p>
                             <p class="mt-2 text-2xl font-bold tabular-nums">${escapeHtml(`${selisihSign}${formatRupiah(Math.abs(selisih))}`)}</p>
                             <p class="mt-1 text-xs text-blue-100/80">Pendapatan lunas dikurangi pengeluaran aktif (${escapeHtml(formatDateIndo(reportStart))} – ${escapeHtml(formatDateIndo(reportEnd))})</p>
                         </div>
 
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:col-span-2">
-                            <div class="wn-card p-4">
+                            <div data-motion-card class="wn-card wn-interactive-card p-4">
                                 <p class="text-xs font-medium text-ink-muted">Total Pendapatan</p>
                                 <p class="mt-2 text-xl font-bold text-success tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pendapatan))}</p>
                                 <p class="mt-1 text-xs text-ink-muted">Berdasarkan pembayaran lunas</p>
                             </div>
-                            <div class="wn-card p-4">
+                            <div data-motion-card class="wn-card wn-interactive-card p-4">
                                 <p class="text-xs font-medium text-ink-muted">Total Pengeluaran Aktif</p>
                                 <p class="mt-2 text-xl font-bold text-danger tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pengeluaran))}</p>
                                 <p class="mt-1 text-xs text-ink-muted">Pengeluaran batal dikecualikan</p>
                             </div>
-                            <div class="wn-card p-4">
+                            <div data-motion-card class="wn-card wn-interactive-card p-4">
                                 <p class="text-xs font-medium text-ink-muted">Jumlah Kendaraan</p>
                                 <p class="mt-2 text-xl font-bold text-ink tabular-nums">${reportSummary.jumlah_kendaraan ?? 0}</p>
                                 <p class="mt-1 text-xs text-ink-muted">Transaksi aktif non-batal</p>
@@ -165,7 +171,7 @@ export function mountOwnerFinanceView(container) {
                     </div>
                 ` : ''}
 
-                <div class="wn-card overflow-hidden">
+                <div data-motion-reveal class="wn-card overflow-hidden">
                     <div class="border-b border-border-subtle px-4 py-3 text-sm font-bold text-ink">Rincian Harian (WIB)</div>
                     ${reportDaily.length === 0 || !hasPeriodActivity ? `
                         <div class="p-4">
@@ -247,7 +253,7 @@ export function mountOwnerFinanceView(container) {
 
         return `
             <div class="grid gap-6 lg:grid-cols-3">
-                <div class="wn-card overflow-hidden lg:col-span-2">
+                <div data-motion-card class="wn-card min-w-0 overflow-hidden lg:col-span-2">
                     <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-4 py-3">
                         <div class="inline-flex flex-wrap gap-1 rounded-lg bg-app-bg p-1 text-xs font-semibold">
                             ${[
@@ -260,6 +266,9 @@ export function mountOwnerFinanceView(container) {
                                 </button>
                             `).join('')}
                         </div>
+                        ${activeCategories.length > 0 && !cancelling ? `
+                            <button id="exp-jump-form-btn" type="button" class="wn-btn-primary min-h-[34px] px-3 py-1.5 text-xs lg:hidden">+ Catat</button>
+                        ` : ''}
                     </div>
                     ${allRows.length === 0 ? `
                         <div class="p-4">
@@ -295,7 +304,7 @@ export function mountOwnerFinanceView(container) {
                                             ${isVoid ? '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-danger ring-1 ring-inset ring-red-600/20">Dibatalkan</span>' : badgeStatusAktif(true)}
                                             ${!isVoid ? `
                                                 <div class="flex flex-wrap gap-2">
-                                                    <button type="button" data-edit-exp="${exp.id_pengeluaran}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Ubah</button>
+                                                    <button type="button" data-edit-exp="${exp.id_pengeluaran}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
                                                     <button type="button" data-cancel-exp="${exp.id_pengeluaran}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Batalkan</button>
                                                 </div>
                                             ` : ''}
@@ -419,7 +428,7 @@ export function mountOwnerFinanceView(container) {
 
         return `
             <div class="grid gap-6 lg:grid-cols-3">
-                <div class="wn-card overflow-hidden lg:col-span-2">
+                <div class="wn-card min-w-0 overflow-hidden lg:col-span-2">
                     ${expenseCategories.length === 0 ? `
                         <div class="p-4">
                             ${renderEmptyState({
@@ -437,7 +446,7 @@ export function mountOwnerFinanceView(container) {
                                         ${badgeStatusAktif(Boolean(c.status_aktif))}
                                     </div>
                                     <div class="flex flex-wrap gap-2">
-                                        <button type="button" data-edit-expcat="${c.id_kategori_pengeluaran}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Ubah</button>
+                                        <button type="button" data-edit-expcat="${c.id_kategori_pengeluaran}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
                                         ${c.status_aktif ? `<button type="button" data-del-expcat="${c.id_kategori_pengeluaran}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
                                     </div>
                                 </div>
@@ -490,11 +499,14 @@ export function mountOwnerFinanceView(container) {
 
     function bindEvents() {
         container.querySelector('#fin-retry-btn')?.addEventListener('click', loadAll);
+        container.querySelector('#exp-jump-form-btn')?.addEventListener('click', () => scrollToElement('#exp-form'));
         container.querySelectorAll('[data-fin-tab]').forEach((btn) =>
             btn.addEventListener('click', () => {
                 activeTab = btn.getAttribute('data-fin-tab');
                 errorObj = null;
+                syncFinanceTabUrl(activeTab);
                 render();
+                motion.animateTabPanel();
             })
         );
 
@@ -542,6 +554,7 @@ export function mountOwnerFinanceView(container) {
                 editingExpId = Number(b.getAttribute('data-edit-exp'));
                 cancellingExpId = null;
                 render();
+                scrollToElement('#exp-form');
             })
         );
         container.querySelectorAll('[data-cancel-exp]').forEach((b) =>
@@ -549,6 +562,7 @@ export function mountOwnerFinanceView(container) {
                 cancellingExpId = Number(b.getAttribute('data-cancel-exp'));
                 editingExpId = null;
                 render();
+                scrollToElement('#exp-cancel-form');
             })
         );
         container.querySelector('#exp-reset-mode')?.addEventListener('click', () => {

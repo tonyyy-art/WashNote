@@ -1,4 +1,5 @@
 import { washnoteApi } from '../api/client.js';
+import { createViewMotion } from '../motion/motionSystem.js';
 import { APP_VIEWS, isOwner, navigateTo, showToast } from '../state/store.js';
 import {
     badgeKendaraan,
@@ -19,6 +20,7 @@ import {
 } from '../utils/formatters.js';
 
 export function mountDashboardView(container) {
+    const motion = createViewMotion(container);
     let isLoading = true;
     let errorObj = null;
     let ordersPage = null;
@@ -63,6 +65,7 @@ export function mountDashboardView(container) {
         } finally {
             isLoading = false;
             render();
+            motion.runIntro();
         }
     }
 
@@ -109,10 +112,10 @@ export function mountDashboardView(container) {
 
         return `
             <div class="grid gap-4 xl:grid-cols-3">
-                <div class="wn-card p-5 xl:col-span-2">
+                <div data-motion-card class="wn-card wn-interactive-card p-4 sm:p-5 xl:col-span-2">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <h2 class="text-sm font-bold text-ink">Ringkasan Finansial Hari Ini (WIB)</h2>
-                        <span class="rounded-full bg-primary-soft px-2.5 py-0.5 text-[11px] font-semibold text-primary">Berdasarkan Transaksi Lunas</span>
+                        <span class="rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent ring-1 ring-inset ring-accent-border">Berdasarkan Transaksi Lunas</span>
                     </div>
 
                     <div class="mt-3 grid gap-3 sm:grid-cols-3">
@@ -131,26 +134,34 @@ export function mountDashboardView(container) {
                     </div>
                 </div>
 
-                <div class="wn-card flex flex-col justify-between p-5">
+                <div data-motion-card class="wn-card wn-interactive-card flex flex-col justify-between p-4 sm:p-5">
                     <div class="flex items-center justify-between">
                         <h2 class="text-sm font-bold text-ink">Pintasan Manajemen</h2>
                     </div>
-                    <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
+                    <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2">
                         <button type="button" data-dash-nav="${APP_VIEWS.ORDERS}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
-                            ${iconSvg('receipt', 'h-3.5 w-3.5 text-primary')}
+                            ${iconSvg('receipt', 'h-3.5 w-3.5 text-accent')}
                             <span class="truncate">Riwayat</span>
                         </button>
                         <button type="button" data-dash-nav="${APP_VIEWS.OWNER_FINANCE}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
-                            ${iconSvg('chart', 'h-3.5 w-3.5 text-primary')}
+                            ${iconSvg('chart', 'h-3.5 w-3.5 text-accent')}
                             <span class="truncate">Laporan</span>
                         </button>
                         <button type="button" data-dash-nav="${APP_VIEWS.OWNER_CATALOG}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
-                            ${iconSvg('tag', 'h-3.5 w-3.5 text-primary')}
+                            ${iconSvg('tag', 'h-3.5 w-3.5 text-accent')}
                             <span class="truncate">Katalog</span>
                         </button>
                         <button type="button" data-dash-nav="${APP_VIEWS.OWNER_STAFF}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
-                            ${iconSvg('users', 'h-3.5 w-3.5 text-primary')}
+                            ${iconSvg('users', 'h-3.5 w-3.5 text-accent')}
                             <span class="truncate">Akun Kasir</span>
+                        </button>
+                        <button type="button" data-dash-nav="${APP_VIEWS.OPERATING_HOURS}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
+                            ${iconSvg('clock', 'h-3.5 w-3.5 text-accent')}
+                            <span class="truncate">Jam Buka</span>
+                        </button>
+                        <button type="button" data-dash-nav="${APP_VIEWS.OWNER_AUDIT}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
+                            ${iconSvg('shield', 'h-3.5 w-3.5 text-accent')}
+                            <span class="truncate">Audit Log</span>
                         </button>
                     </div>
                 </div>
@@ -169,7 +180,7 @@ export function mountDashboardView(container) {
                 ${renderPageHeader({
                     title: ownerMode ? 'Beranda Owner' : 'Beranda Kasir',
                     actionsHtml: `
-                        <button id="dash-create-order-btn" type="button" class="wn-btn-primary gap-1.5">
+                        <button id="dash-create-order-btn" type="button" class="wn-btn-primary w-full gap-1.5 sm:w-auto">
                             ${iconSvg('plus', 'h-4 w-4')}
                             <span>Buat Pesanan</span>
                         </button>
@@ -177,7 +188,7 @@ export function mountDashboardView(container) {
                 })}
 
                 ${scheduleStatus ? `
-                    <div class="wn-card px-4 py-3">
+                    <div data-motion-card class="wn-card px-4 py-3">
                         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div class="flex flex-wrap items-center gap-2.5">
                                 <span class="text-xs font-semibold text-ink-muted">${escapeHtml(formatDateFullIndo(scheduleStatus.tanggal))}</span>
@@ -203,7 +214,7 @@ export function mountDashboardView(container) {
 
                 ${summary ? `
                     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                        <div class="wn-card min-w-0 p-3.5 sm:p-4">
+                        <div data-motion-card class="wn-card wn-interactive-card min-w-0 p-3.5 sm:p-4">
                             <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
                                 <span>Antrean Aktif</span>
                                 <span class="rounded-lg bg-app-bg p-1.5 text-brand-navy">${iconSvg('clock', 'h-4 w-4')}</span>
@@ -211,7 +222,7 @@ export function mountDashboardView(container) {
                             <p class="mt-2 text-2xl font-bold text-ink tabular-nums">${summary.antrean_aktif_total ?? 0}</p>
                             <p class="mt-1 text-xs text-ink-muted">Berjalan ${summary.berjalan_count ?? 0} • Selesai belum bayar ${summary.selesai_belum_dibayar_count ?? 0}</p>
                         </div>
-                        <div class="wn-card min-w-0 p-3.5 sm:p-4">
+                        <div data-motion-card class="wn-card wn-interactive-card min-w-0 p-3.5 sm:p-4">
                             <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
                                 <span>Belum Dibayar</span>
                                 <span class="rounded-lg bg-amber-50 p-1.5 text-warning">${iconSvg('wallet', 'h-4 w-4')}</span>
@@ -219,17 +230,17 @@ export function mountDashboardView(container) {
                             <p class="mt-2 text-2xl font-bold text-warning tabular-nums">${summary.belum_dibayar_count ?? 0}</p>
                             <p class="mt-1 text-xs text-ink-muted">Menunggu pelunasan</p>
                         </div>
-                        <div class="wn-card min-w-0 p-3.5 sm:p-4">
+                        <div data-motion-card class="wn-card wn-interactive-card min-w-0 p-3.5 sm:p-4">
                             <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
                                 <span>Kendaraan Aktif</span>
-                                <span class="rounded-lg bg-primary-soft p-1.5 text-primary">${iconSvg('car', 'h-4 w-4')}</span>
+                                <span class="rounded-lg bg-blue-50 p-1.5 text-process">${iconSvg('car', 'h-4 w-4')}</span>
                             </div>
                             <p class="mt-2 text-lg font-bold text-ink tabular-nums">
                                 ${summary.kendaraan_menunggu_count ?? 0} M • ${summary.kendaraan_proses_count ?? 0} P • ${summary.kendaraan_selesai_count ?? 0} S
                             </p>
                             <p class="mt-1 text-xs text-ink-muted">Menunggu / Proses / Selesai</p>
                         </div>
-                        <div class="wn-card min-w-0 p-3.5 sm:p-4">
+                        <div data-motion-card class="wn-card wn-interactive-card min-w-0 p-3.5 sm:p-4">
                             <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
                                 <span>Pesanan Hari Ini (WIB)</span>
                                 <span class="rounded-lg bg-green-50 p-1.5 text-success">${iconSvg('receipt', 'h-4 w-4')}</span>
@@ -240,7 +251,7 @@ export function mountDashboardView(container) {
                     </div>
                 ` : ''}
 
-                <div class="wn-card overflow-hidden">
+                <div data-motion-reveal class="wn-card overflow-hidden">
                     <div class="border-b border-border-subtle p-4">
                         <div class="mb-3 flex items-center justify-between">
                             <h2 class="text-sm font-bold text-ink">Antrean Aktif</h2>
@@ -307,6 +318,9 @@ export function mountDashboardView(container) {
         `;
 
         bindEvents();
+        if (!isLoading) {
+            motion.refresh();
+        }
     }
 
     function renderQueueCard(order, activeBusyVehicleId) {
@@ -314,7 +328,7 @@ export function mountDashboardView(container) {
         const vehicles = order.kendaraan || [];
 
         return `
-            <div class="p-4 transition hover:bg-app-bg/60">
+            <div class="wn-interactive-card p-4 transition hover:bg-app-bg/60">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div class="min-w-0 space-y-1">
                         <div class="flex flex-wrap items-center gap-2">
@@ -335,7 +349,7 @@ export function mountDashboardView(container) {
                             type="button"
                             data-open-order="${order.id_pesanan}"
                             data-open-tab="detail"
-                            class="inline-flex min-h-[36px] items-center rounded-xl border border-border-subtle bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-app-bg"
+                            class="wn-btn-secondary min-h-[36px] px-3 py-1.5 text-xs"
                         >
                             Detail / Edit
                         </button>
@@ -344,7 +358,7 @@ export function mountDashboardView(container) {
                                 type="button"
                                 data-open-order="${order.id_pesanan}"
                                 data-open-tab="payment"
-                                class="inline-flex min-h-[36px] items-center rounded-xl bg-primary px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-hover"
+                                class="wn-btn-primary min-h-[36px] px-3.5 py-1.5 text-xs"
                             >
                                 Bayar
                             </button>
@@ -382,7 +396,7 @@ export function mountDashboardView(container) {
                                                 data-veh-status="${targetStatus}"
                                                 data-order-id="${order.id_pesanan}"
                                                 ${isCurrent || isBusy ? 'disabled' : ''}
-                                                class="min-h-[34px] rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                                                class="min-h-[34px] rounded-lg px-2.5 py-1 text-[11px] font-semibold transition active:scale-[0.97] ${
                                                     isCurrent
                                                         ? 'bg-brand-navy text-white'
                                                         : 'border border-border-subtle bg-surface text-ink hover:bg-primary-soft disabled:opacity-50'

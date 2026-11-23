@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'lenis/dist/lenis.css';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -10,16 +11,21 @@
 
     --color-brand-navy: #172B4D;
     --color-brand-navy-hover: #0F1F3A;
-    --color-primary: #2563EB;
-    --color-primary-hover: #1D4ED8;
-    --color-primary-soft: #EFF6FF;
-    --color-primary-border: #BFDBFE;
-    --color-app-bg: #F5F7FB;
+    --color-primary: #172B4D;
+    --color-primary-hover: #0F1F3A;
+    --color-primary-soft: #EFF3FA;
+    --color-primary-border: #CBD5E1;
+    --color-accent: #0F766E;
+    --color-accent-hover: #115E59;
+    --color-accent-soft: #F0FDFA;
+    --color-accent-border: #99F6E4;
+    --color-app-bg: #F7F8FA;
     --color-surface: #FFFFFF;
     --color-ink: #172033;
     --color-ink-muted: #64748B;
     --color-border-subtle: #DCE3EF;
     --color-success: #15803D;
+    --color-process: #2563EB;
     --color-warning: #D97706;
     --color-danger: #DC2626;
 }
@@ -36,11 +42,31 @@
     textarea,
     button {
         font-family: inherit;
+        scroll-margin-bottom: 6.5rem;
     }
 }
 
 .tabular-nums {
     font-variant-numeric: tabular-nums;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .wn-interactive-card {
+        transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease;
+    }
+
+    .wn-interactive-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px -14px rgba(23, 43, 77, 0.25);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wn-interactive-card,
+    .wn-interactive-card:hover {
+        transition: none !important;
+        transform: none !important;
+    }
 }
 
 @layer components {
@@ -57,15 +83,15 @@
     }
 
     .wn-input {
-        @apply block min-h-[40px] w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-muted/75 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15;
+        @apply block min-h-[40px] w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-muted/75 focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-navy/15;
     }
 
     .wn-textarea {
-        @apply block w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-muted/75 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15;
+        @apply block w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-muted/75 focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-navy/15;
     }
 
     .wn-select {
-        @apply min-h-[40px] w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-lg border border-border-subtle bg-surface bg-no-repeat py-2 pl-3 pr-9 text-sm text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15;
+        @apply min-h-[40px] w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-lg border border-border-subtle bg-surface bg-no-repeat py-2 pl-3 pr-9 text-sm text-ink focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-navy/15;
         -webkit-appearance: none;
         -moz-appearance: none;
         appearance: none;
@@ -83,26 +109,26 @@
     }
 
     .wn-checkbox {
-        @apply h-4 w-4 rounded border-border-subtle text-primary accent-primary focus:ring-2 focus:ring-primary/20;
+        @apply h-4 w-4 rounded border-border-subtle text-brand-navy accent-brand-navy focus:ring-2 focus:ring-brand-navy/20;
     }
 
     .wn-link {
-        @apply font-semibold text-primary transition hover:text-primary-hover;
+        @apply font-semibold text-accent transition hover:text-accent-hover;
     }
 
     .wn-btn-primary {
-        @apply inline-flex min-h-[40px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-55;
+        @apply inline-flex min-h-[40px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white transition active:scale-[0.985] hover:bg-brand-navy-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy disabled:cursor-not-allowed disabled:opacity-55;
     }
 
     .wn-btn-dark {
-        @apply inline-flex min-h-[40px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-navy-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy disabled:cursor-not-allowed disabled:opacity-55;
+        @apply inline-flex min-h-[40px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white transition active:scale-[0.985] hover:bg-brand-navy-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy disabled:cursor-not-allowed disabled:opacity-55;
     }
 
     .wn-btn-secondary {
-        @apply inline-flex min-h-[40px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-border-subtle bg-surface px-3.5 py-2 text-sm font-medium text-ink transition hover:bg-app-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-55;
+        @apply inline-flex min-h-[40px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-border-subtle bg-surface px-3.5 py-2 text-sm font-medium text-ink transition active:scale-[0.985] hover:bg-app-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-navy disabled:cursor-not-allowed disabled:opacity-55;
     }
 
     .wn-btn-danger {
-        @apply inline-flex min-h-[40px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg bg-danger px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:cursor-not-allowed disabled:opacity-55;
+        @apply inline-flex min-h-[40px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg bg-danger px-4 py-2 text-sm font-semibold text-white transition active:scale-[0.985] hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger disabled:cursor-not-allowed disabled:opacity-55;
     }
 }

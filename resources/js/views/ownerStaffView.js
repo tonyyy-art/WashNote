@@ -1,5 +1,6 @@
 import { washnoteApi } from '../api/client.js';
-import { showToast } from '../state/store.js';
+import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
+import { APP_VIEWS, navigateTo, showToast } from '../state/store.js';
 import {
     badgeStatusAktif,
     escapeHtml,
@@ -13,6 +14,7 @@ import {
 } from '../utils/formatters.js';
 
 export function mountOwnerStaffView(container) {
+    const motion = createViewMotion(container);
     let isLoading = true;
     let isSubmitting = false;
     let errorObj = null;
@@ -34,6 +36,7 @@ export function mountOwnerStaffView(container) {
         } finally {
             isLoading = false;
             render();
+            motion.runIntro();
         }
     }
 
@@ -44,13 +47,17 @@ export function mountOwnerStaffView(container) {
 
         container.innerHTML = `
             <div class="space-y-5">
-                ${renderPageHeader({ title: 'Akun Kasir' })}
+                ${renderPageHeader({
+                    backBtnId: 'staff-back-btn',
+                    backLabel: '← Kembali ke Akun',
+                    title: 'Akun Kasir',
+                })}
 
                 ${errorObj && rows.length > 0 ? renderErrorAlert(errorObj) : ''}
 
                 <div class="grid gap-6 lg:grid-cols-3">
-                    <div class="space-y-4 lg:col-span-2">
-                        <div class="wn-card p-4">
+                    <div class="min-w-0 space-y-4 lg:col-span-2">
+                        <div data-motion-card class="wn-card p-4">
                             <form id="kasir-filter-form" class="flex flex-col gap-2.5 sm:flex-row sm:items-center">
                                 <input id="kasir-search" type="search" value="${escapeHtml(filters.search)}" placeholder="Cari nama atau username..." class="wn-input flex-1" />
                                 <div class="sm:w-44">
@@ -64,7 +71,7 @@ export function mountOwnerStaffView(container) {
                             </form>
                         </div>
 
-                        <div class="wn-card overflow-hidden">
+                        <div data-motion-reveal class="wn-card overflow-hidden">
                             ${isLoading ? renderLoadingState('Memuat daftar kasir...') : errorObj && rows.length === 0 ? `
                                 <div class="p-4">
                                     ${renderEmptyState({
@@ -97,7 +104,7 @@ export function mountOwnerStaffView(container) {
                                         <div class="space-y-3 p-4">
                                             <div class="flex items-start justify-between gap-2">
                                                 <div class="flex items-center gap-3 min-w-0">
-                                                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${row.status_aktif ? 'bg-primary-soft text-primary' : 'bg-slate-100 text-ink-muted'} text-xs font-bold">
+                                                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${row.status_aktif ? 'bg-accent-soft text-accent' : 'bg-slate-100 text-ink-muted'} text-xs font-bold">
                                                         ${escapeHtml(getInitials(row.nama_lengkap))}
                                                     </div>
                                                     <div class="min-w-0">
@@ -108,7 +115,7 @@ export function mountOwnerStaffView(container) {
                                                 ${badgeStatusAktif(Boolean(row.status_aktif))}
                                             </div>
                                             <div class="flex flex-wrap gap-2">
-                                                <button type="button" data-k-action="edit" data-k-id="${row.id_pengguna}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Edit Nama</button>
+                                                <button type="button" data-k-action="edit" data-k-id="${row.id_pengguna}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Edit Nama</button>
                                                 <button type="button" data-k-action="status" data-k-id="${row.id_pengguna}" class="inline-flex min-h-[34px] items-center rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-warning hover:bg-amber-100">${row.status_aktif ? 'Nonaktifkan' : 'Aktifkan'}</button>
                                                 <button type="button" data-k-action="reset" data-k-id="${row.id_pengguna}" class="inline-flex min-h-[34px] items-center rounded-md border border-border-subtle bg-surface px-3 text-xs font-semibold text-ink hover:bg-app-bg">Reset Sandi</button>
                                             </div>
@@ -129,7 +136,7 @@ export function mountOwnerStaffView(container) {
                                                 <tr class="hover:bg-app-bg/50">
                                                     <td class="px-4 py-3">
                                                         <div class="flex items-center gap-3">
-                                                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${row.status_aktif ? 'bg-primary-soft text-primary' : 'bg-slate-100 text-ink-muted'} text-xs font-bold">
+                                                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${row.status_aktif ? 'bg-accent-soft text-accent' : 'bg-slate-100 text-ink-muted'} text-xs font-bold">
                                                                 ${escapeHtml(getInitials(row.nama_lengkap))}
                                                             </div>
                                                             <div>
@@ -144,7 +151,7 @@ export function mountOwnerStaffView(container) {
                                                     <td class="px-4 py-3 text-right space-x-2.5 whitespace-nowrap">
                                                         <button type="button" data-k-action="edit" data-k-id="${row.id_pengguna}" class="wn-link text-xs">Edit Nama</button>
                                                         <button type="button" data-k-action="status" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-warning hover:text-amber-800">${row.status_aktif ? 'Nonaktifkan' : 'Aktifkan'}</button>
-                                                        <button type="button" data-k-action="reset" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-brand-navy hover:text-primary">Reset Sandi</button>
+                                                        <button type="button" data-k-action="reset" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-brand-navy hover:text-accent">Reset Sandi</button>
                                                     </td>
                                                 </tr>
                                             `).join('')}
@@ -156,7 +163,7 @@ export function mountOwnerStaffView(container) {
                         </div>
                     </div>
 
-                    <div class="space-y-4">
+                    <div data-motion-card class="min-w-0 space-y-4">
                         ${selected && modalMode ? renderActionPanel(selected, modalMode) : `
                             <form id="kasir-create-form" class="wn-card space-y-3.5 p-5">
                                 <h3 class="text-sm font-bold text-ink">Buat Akun Kasir</h3>
@@ -165,7 +172,7 @@ export function mountOwnerStaffView(container) {
                                     <input id="new-k-name" type="text" required minlength="2" class="wn-input" />
                                 </div>
                                 <div>
-                                    <label for="new-k-user" class="wn-label">Username <span class="text-danger">*</span> <span class="font-normal text-ink-muted">(3–100 huruf/angka/._-)</span></label>
+                                    <label for="new-k-user" class="wn-label">Username <span class="text-danger">*</span> <span class="font-normal text-ink-muted">(3–100 huruf, angka, . _ -)</span></label>
                                     <input id="new-k-user" type="text" required minlength="3" class="wn-input" />
                                 </div>
                                 <div>
@@ -185,6 +192,9 @@ export function mountOwnerStaffView(container) {
         `;
 
         bindEvents(selected);
+        if (!isLoading) {
+            motion.refresh();
+        }
     }
 
     function renderActionPanel(selected, mode) {
@@ -244,6 +254,7 @@ export function mountOwnerStaffView(container) {
     }
 
     function bindEvents(selected) {
+        container.querySelector('#staff-back-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.PROFILE));
         container.querySelector('#kasir-retry-btn')?.addEventListener('click', loadStaff);
         container.querySelector('#kasir-reset-filter-btn')?.addEventListener('click', () => {
             filters = { status: 'all', search: '', page: 1 };
@@ -273,6 +284,7 @@ export function mountOwnerStaffView(container) {
                 modalMode = btn.getAttribute('data-k-action');
                 errorObj = null;
                 render();
+                scrollToElement(`#kasir-${modalMode === 'status' ? 'status' : modalMode}-form`);
             });
         });
 

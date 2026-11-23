@@ -1,5 +1,6 @@
 import { washnoteApi } from '../api/client.js';
-import { isOwner, showToast } from '../state/store.js';
+import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
+import { APP_VIEWS, isOwner, navigateTo, showToast } from '../state/store.js';
 import {
     badgeOperasional,
     escapeHtml,
@@ -16,6 +17,7 @@ import {
 const DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu'];
 
 export function mountOperatingHoursView(container) {
+    const motion = createViewMotion(container);
     let isLoading = true;
     let isSubmitting = false;
     let errorObj = null;
@@ -49,6 +51,7 @@ export function mountOperatingHoursView(container) {
         } finally {
             isLoading = false;
             render();
+            motion.runIntro();
         }
     }
 
@@ -62,6 +65,8 @@ export function mountOperatingHoursView(container) {
         container.innerHTML = `
             <div class="space-y-5">
                 ${renderPageHeader({
+                    backBtnId: 'hours-back-btn',
+                    backLabel: ownerMode ? '← Kembali ke Akun' : '← Kembali ke Beranda',
                     title: 'Jam Operasional',
                     subtitle: 'Asia/Jakarta (WIB) • Tutup maksimal 21.00 WIB',
                 })}
@@ -87,7 +92,7 @@ export function mountOperatingHoursView(container) {
                     })}
                 ` : `
                     <div class="grid gap-6 lg:grid-cols-2">
-                        <div class="wn-card space-y-4 p-4 sm:p-5">
+                        <div data-motion-card class="wn-card min-w-0 space-y-4 p-4 sm:p-5">
                             <div class="flex items-center justify-between">
                                 <h2 class="text-base font-bold text-ink">Jadwal Mingguan</h2>
                                 <span class="text-xs font-semibold ${configComplete ? 'text-success' : 'text-warning'}">${weeklyList.length}/7 hari</span>
@@ -109,7 +114,7 @@ export function mountOperatingHoursView(container) {
                                             </div>
                                             ${ownerMode ? `
                                                 <div class="flex flex-wrap gap-2">
-                                                    <button type="button" data-edit-weekly="${row.id_jam_operasional}" class="wn-link inline-flex min-h-[32px] items-center rounded-md px-2 text-xs hover:bg-primary-soft">Ubah</button>
+                                                    <button type="button" data-edit-weekly="${row.id_jam_operasional}" class="wn-link inline-flex min-h-[32px] items-center rounded-md px-2 text-xs hover:bg-accent-soft">Ubah</button>
                                                     <button type="button" data-del-weekly="${row.id_jam_operasional}" class="inline-flex min-h-[32px] items-center rounded-md px-2 text-xs font-semibold text-danger hover:bg-red-50">Hapus</button>
                                                 </div>
                                             ` : ''}
@@ -150,7 +155,7 @@ export function mountOperatingHoursView(container) {
                             ` : ''}
                         </div>
 
-                        <div class="wn-card space-y-4 p-4 sm:p-5">
+                        <div data-motion-card class="wn-card min-w-0 space-y-4 p-4 sm:p-5">
                             <h2 class="text-base font-bold text-ink">Pengecualian Tanggal</h2>
 
                             ${exceptionsList.length === 0 ? renderEmptyState({
@@ -173,7 +178,7 @@ export function mountOperatingHoursView(container) {
                                             </div>
                                             ${ownerMode ? `
                                                 <div class="flex flex-wrap gap-2 shrink-0">
-                                                    <button type="button" data-edit-exc="${exc.id_pengecualian}" class="wn-link inline-flex min-h-[32px] items-center rounded-md px-2 text-xs hover:bg-primary-soft">Ubah</button>
+                                                    <button type="button" data-edit-exc="${exc.id_pengecualian}" class="wn-link inline-flex min-h-[32px] items-center rounded-md px-2 text-xs hover:bg-accent-soft">Ubah</button>
                                                     <button type="button" data-del-exc="${exc.id_pengecualian}" class="inline-flex min-h-[32px] items-center rounded-md px-2 text-xs font-semibold text-danger hover:bg-red-50">Hapus</button>
                                                 </div>
                                             ` : ''}
@@ -227,9 +232,15 @@ export function mountOperatingHoursView(container) {
         `;
 
         bindEvents();
+        if (!isLoading) {
+            motion.refresh();
+        }
     }
 
     function bindEvents() {
+        container.querySelector('#hours-back-btn')?.addEventListener('click', () => {
+            navigateTo(isOwner() ? APP_VIEWS.PROFILE : APP_VIEWS.DASHBOARD);
+        });
         container.querySelector('#hours-retry-btn')?.addEventListener('click', loadAll);
         container.querySelector('#cancel-edit-weekly')?.addEventListener('click', () => {
             editingWeeklyId = null;
@@ -244,6 +255,7 @@ export function mountOperatingHoursView(container) {
             btn.addEventListener('click', () => {
                 editingWeeklyId = Number(btn.getAttribute('data-edit-weekly'));
                 render();
+                scrollToElement('#weekly-form');
             });
         });
 
@@ -303,6 +315,7 @@ export function mountOperatingHoursView(container) {
             btn.addEventListener('click', () => {
                 editingExceptionId = Number(btn.getAttribute('data-edit-exc'));
                 render();
+                scrollToElement('#exc-form');
             });
         });
 

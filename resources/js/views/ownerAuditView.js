@@ -1,4 +1,6 @@
 import { washnoteApi } from '../api/client.js';
+import { createViewMotion } from '../motion/motionSystem.js';
+import { APP_VIEWS, navigateTo } from '../state/store.js';
 import {
     escapeHtml,
     formatDateIndo,
@@ -212,6 +214,7 @@ function stripSensitiveTechnicalFields(obj) {
 }
 
 export function mountOwnerAuditView(container) {
+    const motion = createViewMotion(container);
     let isLoading = true;
     let errorObj = null;
     let auditPage = null;
@@ -230,6 +233,7 @@ export function mountOwnerAuditView(container) {
         } finally {
             isLoading = false;
             render();
+            motion.runIntro();
         }
     }
 
@@ -239,9 +243,13 @@ export function mountOwnerAuditView(container) {
 
         container.innerHTML = `
             <div class="space-y-5">
-                ${renderPageHeader({ title: 'Audit Perubahan' })}
+                ${renderPageHeader({
+                    backBtnId: 'audit-back-btn',
+                    backLabel: '← Kembali ke Akun',
+                    title: 'Audit Perubahan',
+                })}
 
-                <form id="audit-filter-form" class="wn-card flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+                <form id="audit-filter-form" data-motion-card class="wn-card flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end">
                     <div class="w-full sm:w-56">
                         <label for="audit-entity" class="wn-label">Entitas</label>
                         <select id="audit-entity" class="wn-select">
@@ -257,7 +265,7 @@ export function mountOwnerAuditView(container) {
 
                 ${errorObj && rows.length > 0 ? renderErrorAlert(errorObj) : ''}
 
-                <div class="wn-card overflow-hidden">
+                <div data-motion-reveal class="wn-card overflow-hidden">
                     ${isLoading ? renderLoadingState('Memuat riwayat perubahan...') : errorObj && rows.length === 0 ? `
                         <div class="p-4">
                             ${renderEmptyState({
@@ -359,7 +367,11 @@ export function mountOwnerAuditView(container) {
             </div>
         `;
 
+        container.querySelector('#audit-back-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.PROFILE));
         container.querySelector('#audit-retry-btn')?.addEventListener('click', loadLogs);
+        if (!isLoading) {
+            motion.refresh();
+        }
         container.querySelector('#audit-reset-filter-btn')?.addEventListener('click', () => {
             filters = { entitas: '', record_id: '', page: 1 };
             loadLogs();

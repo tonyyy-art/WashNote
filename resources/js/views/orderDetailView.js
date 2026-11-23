@@ -1,4 +1,5 @@
 import { generateIdempotencyKey, washnoteApi } from '../api/client.js';
+import { createViewMotion } from '../motion/motionSystem.js';
 import { APP_VIEWS, navigateTo, showToast, state } from '../state/store.js';
 import {
     badgeKendaraan,
@@ -12,6 +13,7 @@ import {
 } from '../utils/formatters.js';
 
 export function mountOrderDetailView(container, orderId) {
+    const motion = createViewMotion(container);
     let isLoading = true;
     let isSubmitting = false;
     let errorObj = null;
@@ -47,6 +49,7 @@ export function mountOrderDetailView(container, orderId) {
         } finally {
             isLoading = false;
             render();
+            motion.runIntro();
         }
     }
 
@@ -279,8 +282,8 @@ export function mountOrderDetailView(container, orderId) {
     function render() {
         if (isLoading && !order) {
             container.innerHTML = `
-                <div class="flex items-center justify-center gap-2 rounded-2xl border border-border-subtle bg-surface p-12 text-sm text-ink-muted">
-                    <span class="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent"></span>
+                <div data-motion-state class="flex items-center justify-center gap-2 rounded-2xl border border-border-subtle bg-surface p-12 text-sm text-ink-muted">
+                    <span class="h-5 w-5 animate-spin rounded-full border-2 border-brand-navy border-t-transparent"></span>
                     Memuat detail pesanan...
                 </div>
             `;
@@ -316,9 +319,9 @@ export function mountOrderDetailView(container, orderId) {
                             ${escapeHtml(formatDateTimeWib(order.waktu_pesanan))} • Kasir: ${escapeHtml(order.pengguna?.nama_lengkap || '-')}
                         </p>
                     </div>
-                    <div class="wn-card px-4 py-3 text-left sm:text-right">
+                    <div data-motion-card class="wn-card px-4 py-3 text-left sm:text-right">
                         <p class="text-xs text-ink-muted">Total Tagihan</p>
-                        <p class="text-xl font-bold text-primary tabular-nums">${escapeHtml(formatRupiah(totals.total_harga))}</p>
+                        <p class="text-xl font-bold text-brand-navy tabular-nums">${escapeHtml(formatRupiah(totals.total_harga))}</p>
                         <p class="text-[11px] text-ink-muted">Utama ${escapeHtml(formatRupiah(totals.subtotal_utama))} • Tambahan ${escapeHtml(formatRupiah(totals.subtotal_tambahan))}</p>
                     </div>
                 </div>
@@ -335,7 +338,7 @@ export function mountOrderDetailView(container, orderId) {
                         <button
                             type="button"
                             data-detail-tab="${tabId}"
-                            class="min-h-[38px] rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
+                            class="min-h-[38px] rounded-xl px-3.5 py-2 text-xs font-semibold transition active:scale-[0.985] ${
                                 activeTab === tabId ? 'bg-brand-navy text-white shadow-xs' : 'bg-surface text-ink-muted ring-1 ring-border-subtle hover:bg-app-bg hover:text-ink'
                             }"
                         >
@@ -344,14 +347,17 @@ export function mountOrderDetailView(container, orderId) {
                     `).join('')}
                 </div>
 
-                ${activeTab === 'detail' ? renderDetailTab(isCancelled) : ''}
-                ${activeTab === 'edit' ? renderEditTab(isCancelled, isPaid) : ''}
-                ${activeTab === 'payment' ? renderPaymentTab(isCancelled, isPaid) : ''}
-                ${activeTab === 'cancel' ? renderCancelTab(isCancelled) : ''}
+                <div data-motion-tabpanel>
+                    ${activeTab === 'detail' ? renderDetailTab(isCancelled) : ''}
+                    ${activeTab === 'edit' ? renderEditTab(isCancelled, isPaid) : ''}
+                    ${activeTab === 'payment' ? renderPaymentTab(isCancelled, isPaid) : ''}
+                    ${activeTab === 'cancel' ? renderCancelTab(isCancelled) : ''}
+                </div>
             </div>
         `;
 
         bindDetailEvents(isPaid);
+        motion.refresh();
     }
 
     function renderDetailTab(isCancelled) {
@@ -416,10 +422,14 @@ export function mountOrderDetailView(container, orderId) {
                                                 data-detail-veh-status="${veh.id_kendaraan_pesanan}"
                                                 data-next-status="${st}"
                                                 ${active || isSubmitting ? 'disabled' : ''}
-                                                class="min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                                                class="min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-semibold transition active:scale-[0.97] ${
                                                     active
-                                                        ? 'bg-primary text-white'
-                                                        : 'border border-border-subtle bg-surface text-ink hover:bg-primary-soft disabled:opacity-50'
+                                                        ? st === 'proses'
+                                                            ? 'bg-process text-white'
+                                                            : st === 'selesai'
+                                                              ? 'bg-success text-white'
+                                                              : 'bg-brand-navy text-white'
+                                                        : 'border border-border-subtle bg-surface text-ink hover:bg-app-bg disabled:opacity-50'
                                                 }"
                                             >
                                                 ${labelMap[st]}
@@ -452,7 +462,7 @@ export function mountOrderDetailView(container, orderId) {
                 <div class="wn-card p-4 shadow-xs sm:p-5">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <h3 class="text-base font-bold text-ink">Edit Kendaraan, Layanan & Harga</h3>
-                        <button type="button" id="edit-add-veh-btn" class="inline-flex min-h-[36px] items-center rounded-xl border border-primary-border bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary hover:bg-blue-100">+ Tambah Kendaraan</button>
+                        <button type="button" id="edit-add-veh-btn" class="inline-flex min-h-[36px] items-center rounded-xl border border-accent-border bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent transition active:scale-[0.98] hover:bg-teal-100/70">+ Tambah Kendaraan</button>
                     </div>
 
                     <div class="mt-4 space-y-4">
@@ -587,7 +597,7 @@ export function mountOrderDetailView(container, orderId) {
                 <div>
                     <label for="pay-amount" class="wn-label">Nominal Diterima (Rp)</label>
                     <input id="pay-amount" type="number" min="1" step="1" required value="${Number(totals.total_harga)}" class="wn-input font-semibold tabular-nums" />
-                    <p id="pay-change-preview" class="mt-1.5 text-xs font-medium text-primary">Kembalian: Rp 0</p>
+                    <p id="pay-change-preview" class="mt-1.5 text-xs font-medium text-accent">Kembalian: Rp 0</p>
                 </div>
 
                 <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full py-2.5">
@@ -627,6 +637,7 @@ export function mountOrderDetailView(container, orderId) {
                 activeTab = btn.getAttribute('data-detail-tab');
                 errorObj = null;
                 render();
+                motion.animateTabPanel();
             });
         });
 
@@ -734,7 +745,7 @@ export function mountOrderDetailView(container, orderId) {
 
                 if (method !== 'tunai') {
                     const isInvalidNonCash = Math.abs(amount - total) > 0.001;
-                    previewEl.className = `mt-1.5 text-xs font-medium ${isInvalidNonCash ? 'text-danger' : 'text-primary'}`;
+                    previewEl.className = `mt-1.5 text-xs font-medium ${isInvalidNonCash ? 'text-danger' : 'text-accent'}`;
                     previewEl.textContent =
                         amount > total
                             ? `Pembayaran non-tunai (${method.toUpperCase()}) tidak boleh melebihi total tagihan.`
@@ -743,7 +754,7 @@ export function mountOrderDetailView(container, orderId) {
                               : `Nominal pas ${formatRupiah(total)} (kembalian Rp 0).`;
                 } else {
                     const diff = amount - total;
-                    previewEl.className = `mt-1.5 text-xs font-medium ${diff < 0 ? 'text-danger' : 'text-primary'}`;
+                    previewEl.className = `mt-1.5 text-xs font-medium ${diff < 0 ? 'text-danger' : 'text-accent'}`;
                     previewEl.textContent =
                         diff < 0
                             ? `Nominal masih kurang ${formatRupiah(Math.abs(diff))}.`
