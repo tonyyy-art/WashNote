@@ -11,6 +11,7 @@ import {
     renderErrorAlert,
     renderLoadingState,
     renderPageHeader,
+    renderPaginationBar,
 } from '../utils/formatters.js';
 
 export function mountOrdersListView(container) {
@@ -63,8 +64,8 @@ export function mountOrdersListView(container) {
                 })}
 
                 <div class="wn-card p-4">
-                    <form id="orders-filter-form" class="flex flex-wrap items-end gap-3">
-                        <div class="min-w-[200px] flex-1">
+                    <form id="orders-filter-form" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6 lg:items-end">
+                        <div class="sm:col-span-2 lg:col-span-2">
                             <label for="ord-search" class="wn-label">Nota / Plat Nomor</label>
                             <input
                                 id="ord-search"
@@ -74,7 +75,7 @@ export function mountOrdersListView(container) {
                                 class="wn-input"
                             />
                         </div>
-                        <div class="w-full sm:w-40">
+                        <div>
                             <label for="ord-status" class="wn-label">Status Pesanan</label>
                             <select id="ord-status" class="wn-select">
                                 <option value="">Semua</option>
@@ -83,7 +84,7 @@ export function mountOrdersListView(container) {
                                 <option value="dibatalkan" ${filters.status_pesanan === 'dibatalkan' ? 'selected' : ''}>Dibatalkan</option>
                             </select>
                         </div>
-                        <div class="w-full sm:w-44">
+                        <div>
                             <label for="ord-pay" class="wn-label">Pembayaran</label>
                             <select id="ord-pay" class="wn-select">
                                 <option value="">Semua</option>
@@ -91,15 +92,19 @@ export function mountOrdersListView(container) {
                                 <option value="sudah_dibayar" ${filters.status_pembayaran === 'sudah_dibayar' ? 'selected' : ''}>Sudah Dibayar</option>
                             </select>
                         </div>
-                        <div class="w-[calc(50%-6px)] sm:w-40">
+                        <div>
                             <label for="ord-start" class="wn-label">Dari Tanggal</label>
                             <input id="ord-start" type="date" value="${escapeHtml(filters.tanggal_mulai)}" class="wn-input" />
                         </div>
-                        <div class="w-[calc(50%-6px)] sm:w-40">
-                            <label for="ord-end" class="wn-label">Sampai Tanggal</label>
-                            <input id="ord-end" type="date" value="${escapeHtml(filters.tanggal_akhir)}" class="wn-input" />
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-end lg:flex-col lg:items-stretch">
+                            <div class="flex-1">
+                                <label for="ord-end" class="wn-label">Sampai Tanggal</label>
+                                <input id="ord-end" type="date" value="${escapeHtml(filters.tanggal_akhir)}" class="wn-input" />
+                            </div>
                         </div>
-                        <button type="submit" class="wn-btn-dark">Cari</button>
+                        <div class="sm:col-span-2 lg:col-span-6 lg:flex lg:justify-end">
+                            <button type="submit" class="wn-btn-dark w-full sm:w-auto">Cari Pesanan</button>
+                        </div>
                     </form>
                 </div>
 
@@ -133,9 +138,67 @@ export function mountOrdersListView(container) {
                             })}
                         </div>
                     ` : `
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <div class="divide-y divide-border-subtle md:hidden">
+                            ${items.map((order) => {
+                                const isCancelled = order.status_pesanan === 'dibatalkan';
+                                const isPaid = order.pembayaran?.status_pembayaran === 'sudah_dibayar';
+                                const plates = (order.kendaraan || [])
+                                    .map((v) => `${escapeHtml(v.nama_kategori_snapshot)}${v.plat_nomor ? ` (${escapeHtml(v.plat_nomor)})` : ''}`)
+                                    .join(', ');
+
+                                return `
+                                    <div class="space-y-2.5 p-4">
+                                        <div class="flex items-start justify-between gap-2">
+                                            <div>
+                                                <div class="font-mono text-sm font-bold ${isCancelled ? 'text-ink-muted line-through' : 'text-ink'}">${escapeHtml(order.nomor_nota || `#${order.id_pesanan}`)}</div>
+                                                <div class="text-xs text-ink-muted">${escapeHtml(formatDateTimeWib(order.waktu_pesanan))}</div>
+                                            </div>
+                                            <div class="text-right font-bold tabular-nums ${isCancelled ? 'text-ink-muted line-through' : 'text-ink'}">${escapeHtml(formatRupiah(order.total_harga))}</div>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            ${badgePesanan(order.status_pesanan)}
+                                            ${badgePembayaran(order.pembayaran?.status_pembayaran || 'belum_dibayar')}
+                                        </div>
+                                        <div class="text-xs font-medium text-ink">${plates || '-'}</div>
+                                        ${order.catatan ? `<div class="text-xs text-ink-muted">${escapeHtml(order.catatan)}</div>` : ''}
+                                        ${isCancelled && order.alasan_pembatalan ? `<div class="text-xs font-medium text-danger">Alasan batal: ${escapeHtml(order.alasan_pembatalan)}</div>` : ''}
+                                        <div class="flex flex-wrap gap-2 pt-1">
+                                            <button
+                                                type="button"
+                                                data-view-order="${order.id_pesanan}"
+                                                data-view-tab="detail"
+                                                class="wn-btn-secondary min-h-[36px] flex-1 px-3 py-1.5 text-xs"
+                                            >
+                                                Detail
+                                            </button>
+                                            ${!isCancelled ? `
+                                                <button
+                                                    type="button"
+                                                    data-view-order="${order.id_pesanan}"
+                                                    data-view-tab="edit"
+                                                    class="inline-flex min-h-[36px] flex-1 items-center justify-center rounded-lg border border-primary-border bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary hover:bg-blue-100"
+                                                >
+                                                    Ubah
+                                                </button>
+                                            ` : ''}
+                                            ${!isCancelled && !isPaid ? `
+                                                <button
+                                                    type="button"
+                                                    data-view-order="${order.id_pesanan}"
+                                                    data-view-tab="payment"
+                                                    class="wn-btn-primary min-h-[36px] flex-1 px-3 py-1.5 text-xs"
+                                                >
+                                                    Bayar
+                                                </button>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <div class="hidden overflow-x-auto md:block">
+                            <table class="min-w-full divide-y divide-border-subtle text-left text-sm">
+                                <thead class="bg-app-bg text-xs font-semibold uppercase tracking-wide text-ink-muted">
                                     <tr>
                                         <th class="px-4 py-3">Nota & Waktu</th>
                                         <th class="px-4 py-3">Kendaraan & Plat</th>
@@ -145,7 +208,7 @@ export function mountOrdersListView(container) {
                                         <th class="px-4 py-3 text-right">Aksi</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-200 bg-white">
+                                <tbody class="divide-y divide-border-subtle bg-surface">
                                     ${items.map((order) => {
                                         const isCancelled = order.status_pesanan === 'dibatalkan';
                                         const isPaid = order.pembayaran?.status_pembayaran === 'sudah_dibayar';
@@ -154,25 +217,25 @@ export function mountOrdersListView(container) {
                                             .join(', ');
 
                                         return `
-                                            <tr class="hover:bg-slate-50">
+                                            <tr class="hover:bg-app-bg/50">
                                                 <td class="px-4 py-3">
-                                                    <div class="font-mono font-bold ${isCancelled ? 'text-slate-400 line-through' : 'text-slate-900'}">${escapeHtml(order.nomor_nota || `#${order.id_pesanan}`)}</div>
-                                                    <div class="text-xs text-slate-500">${escapeHtml(formatDateTimeWib(order.waktu_pesanan))}</div>
+                                                    <div class="font-mono font-bold ${isCancelled ? 'text-ink-muted line-through' : 'text-ink'}">${escapeHtml(order.nomor_nota || `#${order.id_pesanan}`)}</div>
+                                                    <div class="text-xs text-ink-muted">${escapeHtml(formatDateTimeWib(order.waktu_pesanan))}</div>
                                                 </td>
                                                 <td class="px-4 py-3">
-                                                    <div class="text-xs font-medium text-slate-800">${plates || '-'}</div>
-                                                    ${order.catatan ? `<div class="mt-0.5 text-xs text-slate-500">${escapeHtml(order.catatan)}</div>` : ''}
-                                                    ${isCancelled && order.alasan_pembatalan ? `<div class="mt-1 text-xs font-medium text-rose-700">Alasan batal: ${escapeHtml(order.alasan_pembatalan)}</div>` : ''}
+                                                    <div class="text-xs font-medium text-ink">${plates || '-'}</div>
+                                                    ${order.catatan ? `<div class="mt-0.5 text-xs text-ink-muted">${escapeHtml(order.catatan)}</div>` : ''}
+                                                    ${isCancelled && order.alasan_pembatalan ? `<div class="mt-1 text-xs font-medium text-danger">Alasan batal: ${escapeHtml(order.alasan_pembatalan)}</div>` : ''}
                                                 </td>
                                                 <td class="px-4 py-3">${badgePesanan(order.status_pesanan)}</td>
                                                 <td class="px-4 py-3">${badgePembayaran(order.pembayaran?.status_pembayaran || 'belum_dibayar')}</td>
-                                                <td class="px-4 py-3 text-right font-bold tabular-nums ${isCancelled ? 'text-slate-400 line-through' : 'text-slate-900'}">${escapeHtml(formatRupiah(order.total_harga))}</td>
+                                                <td class="px-4 py-3 text-right font-bold tabular-nums ${isCancelled ? 'text-ink-muted line-through' : 'text-ink'}">${escapeHtml(formatRupiah(order.total_harga))}</td>
                                                 <td class="px-4 py-3 text-right whitespace-nowrap space-x-1.5">
                                                     <button
                                                         type="button"
                                                         data-view-order="${order.id_pesanan}"
                                                         data-view-tab="detail"
-                                                        class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                                        class="rounded-lg border border-border-subtle bg-surface px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-app-bg"
                                                     >
                                                         Detail
                                                     </button>
@@ -181,7 +244,7 @@ export function mountOrdersListView(container) {
                                                             type="button"
                                                             data-view-order="${order.id_pesanan}"
                                                             data-view-tab="edit"
-                                                            class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-50"
+                                                            class="rounded-lg border border-primary-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary-soft"
                                                         >
                                                             Ubah
                                                         </button>
@@ -191,7 +254,7 @@ export function mountOrdersListView(container) {
                                                             type="button"
                                                             data-view-order="${order.id_pesanan}"
                                                             data-view-tab="payment"
-                                                            class="rounded-lg bg-teal-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-800"
+                                                            class="rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-primary-hover"
                                                         >
                                                             Bayar
                                                         </button>
@@ -203,15 +266,7 @@ export function mountOrdersListView(container) {
                                 </tbody>
                             </table>
                         </div>
-                        ${ordersPage && ordersPage.last_page > 1 ? `
-                            <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
-                                <span>Halaman ${ordersPage.current_page} dari ${ordersPage.last_page} (Total ${ordersPage.total} pesanan)</span>
-                                <div class="flex gap-2">
-                                    <button type="button" data-ord-page="${ordersPage.current_page - 1}" ${ordersPage.current_page <= 1 ? 'disabled' : ''} class="rounded-lg border border-slate-300 px-3 py-1 hover:bg-slate-50 disabled:opacity-50">Sebelumnya</button>
-                                    <button type="button" data-ord-page="${ordersPage.current_page + 1}" ${ordersPage.current_page >= ordersPage.last_page ? 'disabled' : ''} class="rounded-lg border border-slate-300 px-3 py-1 hover:bg-slate-50 disabled:opacity-50">Berikutnya</button>
-                                </div>
-                            </div>
-                        ` : ''}
+                        ${renderPaginationBar(ordersPage, 'data-ord-page', 'pesanan')}
                     `}
                 </div>
             </div>
@@ -518,51 +573,51 @@ export function mountOrderCreateView(container) {
                             <button
                                 id="add-vehicle-btn"
                                 type="button"
-                                class="flex w-full items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-teal-700 hover:border-teal-500 hover:bg-teal-50/40"
+                                class="flex min-h-[44px] w-full items-center justify-center rounded-2xl border-2 border-dashed border-border-subtle bg-surface px-4 py-3 text-sm font-semibold text-primary transition hover:border-primary hover:bg-primary-soft/50"
                             >
                                 + Tambah Kendaraan Lain dalam Pesanan Ini
                             </button>
 
-                            <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                                <label for="create-order-catatan" class="block text-sm font-semibold text-slate-800">Catatan Pesanan (Opsional)</label>
+                            <div class="wn-card p-4 shadow-xs sm:p-5">
+                                <label for="create-order-catatan" class="wn-label text-sm">Catatan Pesanan (Opsional)</label>
                                 <textarea
                                     id="create-order-catatan"
                                     rows="2"
                                     placeholder="Contoh: Pelanggan menunggu di ruang tunggu, hindari semprot bagian kelistrikan"
-                                    class="mt-2 block w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm focus:border-teal-600 focus:outline-none"
+                                    class="wn-textarea"
                                 >${escapeHtml(catatan)}</textarea>
                             </div>
                         </div>
 
                         <div class="space-y-4">
-                            <div class="wn-card sticky top-6 p-5">
-                                <h2 class="text-base font-bold text-slate-900">Ringkasan Pesanan</h2>
-                                <dl class="mt-4 space-y-2.5 border-b border-slate-200 pb-4 text-sm">
-                                    <div class="flex justify-between text-slate-600">
+                            <div class="wn-card p-5 lg:sticky lg:top-6">
+                                <h2 class="text-base font-bold text-ink">Ringkasan Pesanan</h2>
+                                <dl class="mt-4 space-y-2.5 border-b border-border-subtle pb-4 text-sm">
+                                    <div class="flex justify-between text-ink-muted">
                                         <dt>Jumlah Kendaraan</dt>
-                                        <dd class="font-semibold text-slate-900 tabular-nums">${vehicles.length}</dd>
+                                        <dd class="font-semibold text-ink tabular-nums">${vehicles.length}</dd>
                                     </div>
-                                    <div class="flex justify-between text-slate-600">
+                                    <div class="flex justify-between text-ink-muted">
                                         <dt>Subtotal Layanan Utama</dt>
-                                        <dd class="font-semibold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(preview.subtotalUtama))}</dd>
+                                        <dd class="font-semibold text-ink tabular-nums">${escapeHtml(formatRupiah(preview.subtotalUtama))}</dd>
                                     </div>
-                                    <div class="flex justify-between text-slate-600">
+                                    <div class="flex justify-between text-ink-muted">
                                         <dt>Subtotal Layanan Tambahan</dt>
-                                        <dd class="font-semibold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(preview.subtotalTambahan))}</dd>
+                                        <dd class="font-semibold text-ink tabular-nums">${escapeHtml(formatRupiah(preview.subtotalTambahan))}</dd>
                                     </div>
                                 </dl>
                                 <div class="mt-4 flex items-center justify-between">
-                                    <span class="text-sm font-bold text-slate-900">Total Tagihan</span>
-                                    <span class="text-xl font-bold text-teal-700 tabular-nums">${escapeHtml(formatRupiah(preview.total))}</span>
+                                    <span class="text-sm font-bold text-ink">Total Tagihan</span>
+                                    <span class="text-xl font-bold text-primary tabular-nums">${escapeHtml(formatRupiah(preview.total))}</span>
                                 </div>
 
-                                <p class="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                                <p class="mt-3 rounded-lg bg-app-bg px-3 py-2 text-xs text-ink-muted">
                                     Pesanan baru tercatat berstatus <strong>Belum Dibayar</strong>; pelunasan dilakukan di halaman Detail Pesanan.
                                 </p>
 
                                 ${scheduleStatus?.perlu_konfirmasi_hari_libur ? `
                                     <label class="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                                        <input id="create-order-holiday-confirm" type="checkbox" ${konfirmasiHariLibur ? 'checked' : ''} class="mt-0.5 rounded border-amber-400 text-amber-700 focus:ring-amber-600" />
+                                        <input id="create-order-holiday-confirm" type="checkbox" ${konfirmasiHariLibur ? 'checked' : ''} class="wn-checkbox mt-0.5" />
                                         <span>Saya mengonfirmasi pembuatan pesanan pada hari libur operasional.</span>
                                     </label>
                                 ` : ''}
@@ -595,17 +650,17 @@ export function mountOrderCreateView(container) {
         const addOnTariffs = availableTariffs.filter((t) => t.layanan?.tipe_layanan === 'tambahan');
 
         return `
-            <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 class="text-sm font-bold text-slate-900">Kendaraan #${vIdx + 1}</h3>
+            <div class="wn-card p-4 shadow-xs sm:p-5">
+                <div class="flex items-center justify-between border-b border-border-subtle pb-3">
+                    <h3 class="text-sm font-bold text-ink">Kendaraan #${vIdx + 1}</h3>
                     ${vehicles.length > 1 ? `
-                        <button type="button" data-remove-veh="${vIdx}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Hapus Kendaraan</button>
+                        <button type="button" data-remove-veh="${vIdx}" class="inline-flex min-h-[32px] items-center rounded-md px-2 text-xs font-semibold text-danger hover:bg-red-50">Hapus Kendaraan</button>
                     ` : ''}
                 </div>
 
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="wn-label">Kategori Kendaraan <span class="text-rose-600">*</span></label>
+                        <label class="wn-label">Kategori Kendaraan <span class="text-danger">*</span></label>
                         <select data-veh-cat="${vIdx}" class="wn-select">
                             ${catalog.kategori_kendaraan.map((kat) => `
                                 <option value="${kat.id_kategori_kendaraan}" ${Number(kat.id_kategori_kendaraan) === Number(veh.id_kategori_kendaraan) ? 'selected' : ''}>
@@ -615,7 +670,7 @@ export function mountOrderCreateView(container) {
                         </select>
                     </div>
                     <div>
-                        <label class="wn-label">Plat Nomor <span class="font-normal text-slate-400">(Opsional)</span></label>
+                        <label class="wn-label">Plat Nomor <span class="font-normal text-ink-muted">(Opsional)</span></label>
                         <input
                             type="text"
                             maxlength="20"
@@ -628,20 +683,20 @@ export function mountOrderCreateView(container) {
                 </div>
 
                 <div class="mt-4 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Layanan Utama & Tambahan</span>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-xs font-semibold uppercase tracking-wide text-ink-muted">Layanan Utama & Tambahan</span>
                         <button
                             type="button"
                             data-add-service="${vIdx}"
                             ${availableTariffs.length === 0 ? 'disabled' : ''}
-                            class="rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-50"
+                            class="inline-flex min-h-[34px] items-center rounded-lg border border-primary-border bg-primary-soft px-3 py-1 text-xs font-semibold text-primary hover:bg-blue-100 disabled:opacity-50"
                         >
                             + Tambah Layanan
                         </button>
                     </div>
 
                     ${availableTariffs.length === 0 ? `
-                        <p class="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">Belum ada tarif aktif untuk kategori kendaraan ini.</p>
+                        <p class="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Belum ada tarif aktif untuk kategori kendaraan ini.</p>
                     ` : veh.layanan.map((line, lIdx) => {
                         const tariff = availableTariffs.find((t) => Number(t.id_harga) === Number(line.id_harga)) || availableTariffs[0];
                         const basePrice = Number(tariff?.harga_dasar ?? 0);
@@ -651,10 +706,10 @@ export function mountOrderCreateView(container) {
                         const isAdjusted = Math.abs(activePrice - basePrice) > 0.001;
 
                         return `
-                            <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5">
-                                <div class="grid gap-3 sm:grid-cols-12">
-                                    <div class="sm:col-span-6">
-                                        <label class="wn-label">Pilih Layanan <span class="text-rose-600">*</span></label>
+                            <div class="rounded-xl border border-border-subtle bg-app-bg/75 p-3.5">
+                                <div class="grid gap-3 md:grid-cols-12">
+                                    <div class="md:col-span-6">
+                                        <label class="wn-label">Pilih Layanan <span class="text-danger">*</span></label>
                                         <select data-line-tariff="${vIdx}-${lIdx}" class="wn-select">
                                             ${mainTariffs.length > 0 ? `<optgroup label="Layanan Utama">${mainTariffs.map((t) => `
                                                 <option value="${t.id_harga}" ${Number(t.id_harga) === Number(line.id_harga) ? 'selected' : ''}>
@@ -669,9 +724,9 @@ export function mountOrderCreateView(container) {
                                         </select>
                                     </div>
 
-                                    <div class="sm:col-span-5">
+                                    <div class="md:col-span-5">
                                         <label class="wn-label">
-                                            Harga Akhir <span class="text-rose-600">*</span> <span class="font-normal text-slate-500">(${escapeHtml(formatRupiah(minPrice))} – ${escapeHtml(formatRupiah(maxPrice))})</span>
+                                            Harga Akhir <span class="text-danger">*</span> <span class="font-normal text-ink-muted">(${escapeHtml(formatRupiah(minPrice))} – ${escapeHtml(formatRupiah(maxPrice))})</span>
                                         </label>
                                         <input
                                             type="number"
@@ -683,9 +738,9 @@ export function mountOrderCreateView(container) {
                                         />
                                     </div>
 
-                                    <div class="flex items-end justify-end sm:col-span-1">
+                                    <div class="flex items-end justify-end md:col-span-1">
                                         ${veh.layanan.length > 1 ? `
-                                            <button type="button" data-remove-service="${vIdx}-${lIdx}" class="rounded-lg px-2 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50">Hapus</button>
+                                            <button type="button" data-remove-service="${vIdx}-${lIdx}" class="min-h-[36px] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-danger hover:bg-red-50">Hapus</button>
                                         ` : ''}
                                     </div>
                                 </div>
@@ -696,7 +751,7 @@ export function mountOrderCreateView(container) {
                                         data-line-reason="${vIdx}-${lIdx}"
                                         value="${escapeHtml(line.alasan_penyesuaian)}"
                                         placeholder="${isAdjusted ? 'Wajib diisi karena harga berbeda dari harga dasar' : 'Alasan penyesuaian harga (diisi jika harga akhir diubah)'}"
-                                        class="block w-full rounded-lg border ${isAdjusted ? 'border-amber-400 bg-amber-50/70' : 'border-slate-200 bg-white'} px-3 py-1.5 text-xs focus:border-teal-600 focus:outline-none"
+                                        class="block min-h-[36px] w-full rounded-lg border ${isAdjusted ? 'border-amber-400 bg-amber-50/70' : 'border-border-subtle bg-surface'} px-3 py-1.5 text-xs text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
                                     />
                                 </div>
                             </div>

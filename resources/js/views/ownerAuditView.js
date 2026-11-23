@@ -9,6 +9,7 @@ import {
     renderErrorAlert,
     renderLoadingState,
     renderPageHeader,
+    renderPaginationBar,
 } from '../utils/formatters.js';
 
 const ENTITIES = [
@@ -240,18 +241,18 @@ export function mountOwnerAuditView(container) {
             <div class="space-y-5">
                 ${renderPageHeader({ title: 'Audit Perubahan' })}
 
-                <form id="audit-filter-form" class="wn-card flex flex-wrap items-end gap-3 p-4">
-                    <div class="min-w-[190px]">
+                <form id="audit-filter-form" class="wn-card flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+                    <div class="w-full sm:w-56">
                         <label for="audit-entity" class="wn-label">Entitas</label>
                         <select id="audit-entity" class="wn-select">
                             ${ENTITIES.map(([val, lbl]) => `<option value="${val}" ${filters.entitas === val ? 'selected' : ''}>${escapeHtml(lbl)}</option>`).join('')}
                         </select>
                     </div>
-                    <div class="w-36">
+                    <div class="w-full sm:w-36">
                         <label for="audit-record-id" class="wn-label">ID Record</label>
                         <input id="audit-record-id" type="number" min="1" value="${escapeHtml(filters.record_id)}" placeholder="Mis. 12" class="wn-input" />
                     </div>
-                    <button type="submit" class="wn-btn-dark">Filter</button>
+                    <button type="submit" class="wn-btn-dark w-full sm:w-auto">Filter</button>
                 </form>
 
                 ${errorObj && rows.length > 0 ? renderErrorAlert(errorObj) : ''}
@@ -283,7 +284,7 @@ export function mountOwnerAuditView(container) {
                             })}
                         </div>
                     ` : `
-                        <div class="divide-y divide-slate-200">
+                        <div class="divide-y divide-border-subtle">
                             ${rows.map((row) => {
                                 const diffRows = buildHumanDiffRows(row.nilai_sebelum, row.nilai_sesudah);
                                 const safeBefore = stripSensitiveTechnicalFields(row.nilai_sebelum);
@@ -293,47 +294,58 @@ export function mountOwnerAuditView(container) {
                                     <div class="p-4 sm:p-5">
                                         <div class="flex flex-wrap items-center justify-between gap-2">
                                             <div class="flex flex-wrap items-center gap-2 text-xs">
-                                                <span class="rounded-md bg-slate-900 px-2 py-0.5 font-semibold text-white">${escapeHtml(ENTITY_LABELS[row.entitas] || row.entitas)}</span>
-                                                <span class="font-semibold text-slate-900">${escapeHtml(row.pengguna?.nama_lengkap || 'Sistem')}</span>
-                                                ${row.pengguna?.peran ? `<span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-slate-600">${escapeHtml(row.pengguna.peran)}</span>` : ''}
+                                                <span class="rounded-md bg-brand-navy px-2 py-0.5 font-semibold text-white">${escapeHtml(ENTITY_LABELS[row.entitas] || row.entitas)}</span>
+                                                <span class="font-semibold text-ink">${escapeHtml(row.pengguna?.nama_lengkap || 'Sistem')}</span>
+                                                ${row.pengguna?.peran ? `<span class="rounded bg-app-bg px-1.5 py-0.5 text-[11px] font-semibold uppercase text-ink-muted">${escapeHtml(row.pengguna.peran)}</span>` : ''}
                                             </div>
-                                            <span class="text-xs font-medium text-slate-500">${escapeHtml(formatDateTimeWib(row.waktu_perubahan))}</span>
+                                            <span class="text-xs font-medium text-ink-muted">${escapeHtml(formatDateTimeWib(row.waktu_perubahan))}</span>
                                         </div>
 
-                                        ${row.alasan ? `<p class="mt-2 text-xs text-slate-700"><span class="font-semibold text-slate-900">Alasan:</span> ${escapeHtml(row.alasan)}</p>` : ''}
+                                        ${row.alasan ? `<p class="mt-2 text-xs text-ink"><span class="font-semibold">Alasan:</span> ${escapeHtml(row.alasan)}</p>` : ''}
 
                                         ${diffRows.length > 0 ? `
-                                            <div class="mt-3 overflow-x-auto rounded-lg border border-slate-200">
-                                                <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
-                                                    <thead class="bg-slate-50 font-semibold uppercase tracking-wide text-slate-600">
+                                            <div class="mt-3 space-y-2 md:hidden">
+                                                ${diffRows.map((d) => `
+                                                    <div class="rounded-lg border border-border-subtle bg-app-bg/60 p-3 text-xs">
+                                                        <p class="font-semibold text-ink">${escapeHtml(d.label)}</p>
+                                                        <div class="mt-1.5 grid gap-1 text-[11px]">
+                                                            <p class="text-ink-muted"><span class="font-medium">Sebelum:</span> ${escapeHtml(d.before)}</p>
+                                                            <p class="font-medium text-ink"><span class="text-ink-muted">Sesudah:</span> ${escapeHtml(d.after)}</p>
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                            <div class="mt-3 hidden overflow-x-auto rounded-lg border border-border-subtle md:block">
+                                                <table class="min-w-full divide-y divide-border-subtle text-left text-xs">
+                                                    <thead class="bg-app-bg font-semibold uppercase tracking-wide text-ink-muted">
                                                         <tr>
-                                                            <th class="px-3 py-2 w-44">Field</th>
+                                                            <th class="w-44 px-3 py-2">Field</th>
                                                             <th class="px-3 py-2">Nilai Sebelum</th>
                                                             <th class="px-3 py-2">Nilai Sesudah</th>
                                                         </tr>
                                                     </thead>
-                                                    <tbody class="divide-y divide-slate-200 bg-white">
+                                                    <tbody class="divide-y divide-border-subtle bg-surface">
                                                         ${diffRows.map((d) => `
                                                             <tr>
-                                                                <td class="px-3 py-2 font-semibold text-slate-700">${escapeHtml(d.label)}</td>
-                                                                <td class="px-3 py-2 text-slate-500">${escapeHtml(d.before)}</td>
-                                                                <td class="px-3 py-2 font-medium text-slate-900">${escapeHtml(d.after)}</td>
+                                                                <td class="px-3 py-2 font-semibold text-ink">${escapeHtml(d.label)}</td>
+                                                                <td class="px-3 py-2 text-ink-muted">${escapeHtml(d.before)}</td>
+                                                                <td class="px-3 py-2 font-medium text-ink">${escapeHtml(d.after)}</td>
                                                             </tr>
                                                         `).join('')}
                                                     </tbody>
                                                 </table>
                                             </div>
-                                        ` : '<p class="mt-2 text-xs text-slate-500">Tidak ada perbedaan nilai field bisnis yang ditampilkan.</p>'}
+                                        ` : '<p class="mt-2 text-xs text-ink-muted">Tidak ada perbedaan nilai field bisnis yang ditampilkan.</p>'}
 
-                                        <details class="mt-2.5 text-xs text-slate-500">
-                                            <summary class="cursor-pointer font-medium hover:text-slate-700">Detail teknis</summary>
-                                            <div class="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                                                <p class="font-mono text-[11px] text-slate-600">
+                                        <details class="mt-2.5 text-xs text-ink-muted">
+                                            <summary class="cursor-pointer font-medium hover:text-ink">Detail teknis</summary>
+                                            <div class="mt-2 space-y-2 rounded-lg border border-border-subtle bg-app-bg p-3">
+                                                <p class="font-mono text-[11px] text-ink-muted">
                                                     Entitas: ${escapeHtml(row.entitas)} • ID Record: ${escapeHtml(row.record_id)} • ID Aktor: ${escapeHtml(row.id_pengguna)} • Waktu: ${escapeHtml(formatDateTimeWib(row.waktu_perubahan))}
                                                 </p>
                                                 <div class="grid gap-2 sm:grid-cols-2">
-                                                    <pre class="overflow-x-auto whitespace-pre-wrap break-all rounded border border-slate-200 bg-white p-2 font-mono text-[11px] text-slate-600">${escapeHtml(safeBefore ? JSON.stringify(safeBefore, null, 2) : '-')}</pre>
-                                                    <pre class="overflow-x-auto whitespace-pre-wrap break-all rounded border border-slate-200 bg-white p-2 font-mono text-[11px] text-slate-700">${escapeHtml(safeAfter ? JSON.stringify(safeAfter, null, 2) : '-')}</pre>
+                                                    <pre class="overflow-x-auto whitespace-pre-wrap break-all rounded border border-border-subtle bg-surface p-2 font-mono text-[11px] text-ink-muted">${escapeHtml(safeBefore ? JSON.stringify(safeBefore, null, 2) : '-')}</pre>
+                                                    <pre class="overflow-x-auto whitespace-pre-wrap break-all rounded border border-border-subtle bg-surface p-2 font-mono text-[11px] text-ink">${escapeHtml(safeAfter ? JSON.stringify(safeAfter, null, 2) : '-')}</pre>
                                                 </div>
                                             </div>
                                         </details>
@@ -341,15 +353,7 @@ export function mountOwnerAuditView(container) {
                                 `;
                             }).join('')}
                         </div>
-                        ${auditPage && auditPage.last_page > 1 ? `
-                            <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
-                                <span>Halaman ${auditPage.current_page} dari ${auditPage.last_page} (${auditPage.total} entri)</span>
-                                <div class="flex gap-2">
-                                    <button type="button" data-audit-page="${auditPage.current_page - 1}" ${auditPage.current_page <= 1 ? 'disabled' : ''} class="wn-btn-secondary px-3 py-1 text-xs">Sebelumnya</button>
-                                    <button type="button" data-audit-page="${auditPage.current_page + 1}" ${auditPage.current_page >= auditPage.last_page ? 'disabled' : ''} class="wn-btn-secondary px-3 py-1 text-xs">Berikutnya</button>
-                                </div>
-                            </div>
-                        ` : ''}
+                        ${renderPaginationBar(auditPage, 'data-audit-page', 'entri')}
                     `}
                 </div>
             </div>

@@ -31,6 +31,8 @@ export function iconSvg(name, cls = 'h-4 w-4') {
         plus: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />',
         chevronRight: '<path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />',
         logout: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />',
+        menu: '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />',
+        close: '<path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />',
     };
 
     const body = icons[name];
@@ -183,75 +185,107 @@ export function todayWibDateString() {
 
 export function badgePesanan(status) {
     const map = {
-        berjalan: ['Berjalan', 'bg-sky-50 text-sky-700 ring-sky-600/20'],
-        selesai: ['Selesai', 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'],
-        dibatalkan: ['Dibatalkan', 'bg-rose-50 text-rose-700 ring-rose-600/20'],
+        berjalan: ['Berjalan', 'bg-primary-soft text-primary ring-primary-border'],
+        selesai: ['Selesai', 'bg-green-50 text-success ring-green-600/20'],
+        dibatalkan: ['Dibatalkan', 'bg-red-50 text-danger ring-red-600/20'],
     };
 
-    const [label, cls] = map[status] ?? [status || '-', 'bg-slate-100 text-slate-700 ring-slate-500/20'];
+    const [label, cls] = map[status] ?? [status || '-', 'bg-slate-100 text-ink-muted ring-slate-500/20'];
 
     return `<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${cls}">${escapeHtml(label)}</span>`;
 }
 
 export function badgeKendaraan(status) {
     const map = {
-        menunggu: ['Menunggu', 'bg-slate-100 text-slate-700 ring-slate-600/20'],
-        proses: ['Sedang Diproses', 'bg-amber-50 text-amber-800 ring-amber-600/20'],
-        selesai: ['Selesai Cuci', 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'],
+        menunggu: ['Menunggu', 'bg-slate-100 text-ink-muted ring-slate-600/20'],
+        proses: ['Sedang Diproses', 'bg-amber-50 text-warning ring-amber-600/20'],
+        selesai: ['Selesai Cuci', 'bg-green-50 text-success ring-green-600/20'],
     };
 
-    const [label, cls] = map[status] ?? [status || '-', 'bg-slate-100 text-slate-700 ring-slate-500/20'];
+    const [label, cls] = map[status] ?? [status || '-', 'bg-slate-100 text-ink-muted ring-slate-500/20'];
 
     return `<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${cls}">${escapeHtml(label)}</span>`;
 }
 
 export function badgePembayaran(status) {
     const map = {
-        belum_dibayar: ['Belum Dibayar', 'bg-amber-50 text-amber-800 ring-amber-600/20'],
-        sudah_dibayar: ['Sudah Dibayar', 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'],
+        belum_dibayar: ['Belum Dibayar', 'bg-amber-50 text-warning ring-amber-600/20'],
+        sudah_dibayar: ['Sudah Dibayar', 'bg-green-50 text-success ring-green-600/20'],
     };
 
-    const [label, cls] = map[status] ?? [status || '-', 'bg-slate-100 text-slate-700 ring-slate-500/20'];
+    const [label, cls] = map[status] ?? [status || '-', 'bg-slate-100 text-ink-muted ring-slate-500/20'];
 
     return `<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${cls}">${escapeHtml(label)}</span>`;
 }
 
 export function badgeOperasional(status) {
     const map = {
-        dalam_jam: ['Dalam Jam Operasional', 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'],
-        di_luar_jam: ['Di Luar Jam Buka', 'bg-amber-50 text-amber-800 ring-amber-600/20'],
-        hari_libur: ['Hari Libur', 'bg-rose-50 text-rose-700 ring-rose-600/20'],
-        belum_dikonfigurasi: ['Jadwal Belum Lengkap', 'bg-slate-100 text-slate-700 ring-slate-500/20'],
+        dalam_jam: ['Dalam Jam Operasional', 'bg-green-50 text-success ring-green-600/20'],
+        di_luar_jam: ['Di Luar Jam Buka', 'bg-amber-50 text-warning ring-amber-600/20'],
+        hari_libur: ['Hari Libur', 'bg-red-50 text-danger ring-red-600/20'],
+        belum_dikonfigurasi: ['Jadwal Belum Lengkap', 'bg-slate-100 text-ink-muted ring-slate-500/20'],
     };
 
-    const [label, cls] = map[status] ?? [status || '-', 'bg-slate-100 text-slate-700 ring-slate-500/20'];
+    const [label, cls] = map[status] ?? [status || '-', 'bg-slate-100 text-ink-muted ring-slate-500/20'];
 
     return `<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${cls}">${escapeHtml(label)}</span>`;
 }
 
 export function badgeStatusAktif(isAktif) {
     return isAktif
-        ? '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">Aktif</span>'
-        : '<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-500/20">Nonaktif</span>';
+        ? '<span class="inline-flex items-center rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-success ring-1 ring-inset ring-green-600/20">Aktif</span>'
+        : '<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-ink-muted ring-1 ring-inset ring-slate-500/20">Nonaktif</span>';
 }
 
 export function renderPageHeader({ title, subtitle = '', backBtnId = '', backLabel = '← Kembali', actionsHtml = '' }) {
     return `
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                ${backBtnId ? `<button id="${escapeHtml(backBtnId)}" type="button" class="mb-1 text-xs font-semibold text-teal-700 hover:text-teal-900">${escapeHtml(backLabel)}</button>` : ''}
-                <h1 class="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">${escapeHtml(title)}</h1>
-                ${subtitle ? `<p class="mt-0.5 text-sm text-slate-600">${escapeHtml(subtitle)}</p>` : ''}
+            <div class="min-w-0">
+                ${backBtnId ? `<button id="${escapeHtml(backBtnId)}" type="button" class="wn-link mb-1 inline-flex min-h-[32px] items-center text-xs">${escapeHtml(backLabel)}</button>` : ''}
+                <h1 class="text-xl font-bold tracking-tight text-ink sm:text-2xl">${escapeHtml(title)}</h1>
+                ${subtitle ? `<p class="mt-0.5 text-sm text-ink-muted">${escapeHtml(subtitle)}</p>` : ''}
             </div>
             ${actionsHtml ? `<div class="flex flex-wrap items-center gap-2">${actionsHtml}</div>` : ''}
         </div>
     `;
 }
 
+export function renderPaginationBar(paginator, dataAttr, countLabel = '') {
+    if (!paginator || (paginator.last_page ?? 1) <= 1) {
+        return '';
+    }
+
+    const totalText = countLabel ? ` (${paginator.total} ${escapeHtml(countLabel)})` : '';
+
+    return `
+        <div class="flex flex-col gap-2.5 border-t border-border-subtle bg-app-bg/50 px-4 py-3 text-xs text-ink-muted sm:flex-row sm:items-center sm:justify-between">
+            <span>Halaman ${paginator.current_page} dari ${paginator.last_page}${totalText}</span>
+            <div class="flex gap-2">
+                <button
+                    type="button"
+                    ${escapeHtml(dataAttr)}="${paginator.current_page - 1}"
+                    ${paginator.current_page <= 1 ? 'disabled' : ''}
+                    class="wn-btn-secondary flex-1 px-3 py-1.5 text-xs sm:flex-none"
+                >
+                    Sebelumnya
+                </button>
+                <button
+                    type="button"
+                    ${escapeHtml(dataAttr)}="${paginator.current_page + 1}"
+                    ${paginator.current_page >= paginator.last_page ? 'disabled' : ''}
+                    class="wn-btn-secondary flex-1 px-3 py-1.5 text-xs sm:flex-none"
+                >
+                    Berikutnya
+                </button>
+            </div>
+        </div>
+    `;
+}
+
 export function renderLoadingState(message = 'Memuat data...') {
     return `
-        <div class="flex items-center justify-center gap-2.5 p-10 text-sm text-slate-500">
-            <span class="h-4 w-4 animate-spin rounded-full border-2 border-teal-700 border-t-transparent"></span>
+        <div class="flex items-center justify-center gap-2.5 p-10 text-sm text-ink-muted">
+            <span class="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></span>
             <span>${escapeHtml(message)}</span>
         </div>
     `;
@@ -259,17 +293,17 @@ export function renderLoadingState(message = 'Memuat data...') {
 
 export function renderEmptyState({ kind = 'empty', title, message = '', actionsHtml = '' }) {
     const toneMap = {
-        empty: 'border-slate-200 bg-slate-50/70 text-slate-700',
-        filtered: 'border-slate-200 bg-slate-50/70 text-slate-700',
-        error: 'border-rose-200 bg-rose-50/60 text-rose-900',
+        empty: 'border-border-subtle bg-app-bg/70 text-ink',
+        filtered: 'border-border-subtle bg-app-bg/70 text-ink',
+        error: 'border-red-200 bg-red-50/70 text-red-900',
         prerequisite: 'border-amber-200 bg-amber-50/70 text-amber-900',
     };
     const toneCls = toneMap[kind] ?? toneMap.empty;
 
     return `
-        <div class="rounded-xl border ${toneCls} p-8 text-center">
+        <div class="rounded-xl border ${toneCls} p-6 text-center sm:p-8">
             <p class="text-sm font-semibold">${escapeHtml(title)}</p>
-            ${message ? `<p class="mt-1 text-xs opacity-80">${escapeHtml(message)}</p>` : ''}
+            ${message ? `<p class="mt-1 text-xs opacity-85">${escapeHtml(message)}</p>` : ''}
             ${actionsHtml ? `<div class="mt-4 flex flex-wrap items-center justify-center gap-2">${actionsHtml}</div>` : ''}
         </div>
     `;
@@ -317,7 +351,7 @@ export function renderErrorAlert(err) {
     }
 
     return `
-        <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">
             <p class="font-semibold">${escapeHtml(err.message || 'Gagal memproses permintaan.')}</p>
             ${fieldErrors.length > 0 ? `<ul class="mt-1.5 list-disc space-y-0.5 pl-5 text-xs">${fieldErrors.join('')}</ul>` : ''}
         </div>

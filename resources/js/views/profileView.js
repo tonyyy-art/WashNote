@@ -42,18 +42,17 @@ export function mountProfileView(container, onSessionEnded) {
     function renderPasswordField(id, label, placeholder) {
         return `
             <div>
-                <label for="${id}" class="wn-label">${escapeHtml(label)} <span class="text-rose-600">*</span></label>
+                <label for="${id}" class="wn-label">${escapeHtml(label)} <span class="text-danger">*</span></label>
                 <div class="relative">
-                    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-ink-muted">
                         ${iconSvg('lock', 'h-4 w-4')}
                     </span>
-                    <input id="${id}" type="password" required minlength="8" placeholder="${escapeHtml(placeholder)}" class="wn-input pl-9 pr-10" />
+                    <input id="${id}" type="password" required minlength="8" placeholder="${escapeHtml(placeholder)}" class="wn-input pl-9 pr-11" />
                     <button
                         type="button"
-                        tabindex="-1"
                         data-toggle-pass="${id}"
                         aria-label="Tampilkan kata sandi"
-                        class="absolute inset-y-0 right-2.5 flex items-center text-slate-400 hover:text-slate-600"
+                        class="absolute inset-y-0 right-1 flex min-w-[36px] items-center justify-center text-ink-muted hover:text-ink"
                     >
                         ${iconSvg('eye', 'h-4 w-4')}
                     </button>
@@ -71,27 +70,27 @@ export function mountProfileView(container, onSessionEnded) {
 
                 ${errorObj ? renderErrorAlert(errorObj) : ''}
 
-                <div class="rounded-2xl bg-slate-900 p-5 text-white shadow-sm sm:p-6">
+                <div class="wn-card-navy p-5 sm:p-6">
                     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div class="flex items-center gap-4">
-                            <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-teal-600 text-lg font-bold text-white">
+                            <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-lg font-bold text-white">
                                 ${escapeHtml(getInitials(profile?.nama_lengkap))}
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <div class="flex flex-wrap items-center gap-2">
                                     <h2 class="text-lg font-bold">${escapeHtml(profile?.nama_lengkap || '-')}</h2>
-                                    <span class="rounded-full bg-teal-500/20 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-teal-200">
+                                    <span class="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-blue-100">
                                         ${escapeHtml(profile?.peran || '-')}
                                     </span>
                                 </div>
-                                <p class="mt-0.5 font-mono text-xs text-slate-300">@${escapeHtml(profile?.username || '-')}</p>
+                                <p class="mt-0.5 font-mono text-xs text-blue-100/80">@${escapeHtml(profile?.username || '-')}</p>
                             </div>
                         </div>
                         <div>${badgeStatusAktif(Boolean(profile?.status_aktif))}</div>
                     </div>
                     ${!ownerMode ? `
-                        <div class="mt-4 flex items-start gap-2.5 rounded-xl bg-white/10 px-3.5 py-2.5 text-xs text-slate-200">
-                            ${iconSvg('shield', 'mt-0.5 h-4 w-4 text-teal-300')}
+                        <div class="mt-4 flex items-start gap-2.5 rounded-xl bg-white/10 px-3.5 py-2.5 text-xs text-blue-50">
+                            ${iconSvg('shield', 'mt-0.5 h-4 w-4 text-blue-200')}
                             <span>Akses terbatas pada operasional pesanan, antrean, dan pembayaran. Hubungi Owner untuk perubahan tarif atau akun.</span>
                         </div>
                     ` : ''}
@@ -99,7 +98,7 @@ export function mountProfileView(container, onSessionEnded) {
 
                 ${ownerMode ? `
                     <div class="space-y-3">
-                        <h2 class="text-sm font-bold text-slate-900">Manajemen Data & Gerai</h2>
+                        <h2 class="text-sm font-bold text-ink">Manajemen Data & Gerai</h2>
                         <div class="grid gap-3 sm:grid-cols-2">
                             ${[
                                 [APP_VIEWS.OWNER_STAFF, 'users', 'Kelola Akun Kasir', 'Tambah staf, status aktif, dan reset sandi'],
@@ -110,18 +109,18 @@ export function mountProfileView(container, onSessionEnded) {
                                 <button
                                     type="button"
                                     data-prof-nav="${view}"
-                                    class="wn-card flex items-center justify-between gap-3 p-4 text-left transition hover:border-teal-300 hover:bg-teal-50/30"
+                                    class="wn-card flex items-center justify-between gap-3 p-4 text-left transition hover:border-primary-border hover:bg-primary-soft/50"
                                 >
                                     <div class="flex items-start gap-3">
-                                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
+                                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
                                             ${iconSvg(icon, 'h-4 w-4')}
                                         </span>
                                         <div>
-                                            <p class="text-sm font-bold text-slate-900">${escapeHtml(title)}</p>
-                                            <p class="mt-0.5 text-xs text-slate-500">${escapeHtml(desc)}</p>
+                                            <p class="text-sm font-bold text-ink">${escapeHtml(title)}</p>
+                                            <p class="mt-0.5 text-xs text-ink-muted">${escapeHtml(desc)}</p>
                                         </div>
                                     </div>
-                                    ${iconSvg('chevronRight', 'h-4 w-4 text-slate-400')}
+                                    ${iconSvg('chevronRight', 'h-4 w-4 text-ink-muted')}
                                 </button>
                             `).join('')}
                         </div>
@@ -130,23 +129,23 @@ export function mountProfileView(container, onSessionEnded) {
 
                 <form id="change-pass-form" class="wn-card space-y-4 p-5 sm:p-6">
                     <div>
-                        <h2 class="text-base font-bold text-slate-900">Keamanan & Ubah Kata Sandi</h2>
-                        <p class="mt-1 text-xs text-slate-500">Sesi login aktif akan berakhir setelah kata sandi diperbarui.</p>
+                        <h2 class="text-base font-bold text-ink">Keamanan & Ubah Kata Sandi</h2>
+                        <p class="mt-1 text-xs text-ink-muted">Sesi login aktif akan berakhir setelah kata sandi diperbarui.</p>
                     </div>
                     ${renderPasswordField('prof-cur-pass', 'Kata Sandi Saat Ini', 'Masukkan kata sandi saat ini')}
                     ${renderPasswordField('prof-new-pass', 'Kata Sandi Baru (Min. 8 karakter)', 'Minimal 8 karakter')}
                     ${renderPasswordField('prof-conf-pass', 'Konfirmasi Kata Sandi Baru', 'Ketik ulang kata sandi baru')}
-                    <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary">
+                    <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full sm:w-auto">
                         ${isSubmitting ? 'Memproses...' : 'Simpan Kata Sandi'}
                     </button>
                 </form>
 
                 <div class="wn-card flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h3 class="text-sm font-bold text-slate-900">Akhiri Sesi</h3>
-                        <p class="mt-0.5 text-xs text-slate-500">Keluar dari perangkat ini dan cabut token autentikasi aktif.</p>
+                        <h3 class="text-sm font-bold text-ink">Akhiri Sesi</h3>
+                        <p class="mt-0.5 text-xs text-ink-muted">Keluar dari perangkat ini dan cabut token autentikasi aktif.</p>
                     </div>
-                    <button id="prof-logout-btn" type="button" class="wn-btn-danger gap-2">
+                    <button id="prof-logout-btn" type="button" class="wn-btn-danger w-full gap-2 sm:w-auto">
                         ${iconSvg('logout', 'h-4 w-4')}
                         <span>Keluar</span>
                     </button>

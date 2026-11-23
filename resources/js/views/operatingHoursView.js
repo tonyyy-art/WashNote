@@ -71,10 +71,10 @@ export function mountOperatingHoursView(container) {
                 ${statusData ? `
                     <div class="wn-card p-4">
                         <div class="flex flex-wrap items-center gap-2.5">
-                            <span class="text-xs font-semibold text-slate-600">${escapeHtml(formatDateFullIndo(statusData.tanggal))} • ${escapeHtml(formatTimeHm(statusData.waktu_wib))} WIB</span>
+                            <span class="text-xs font-semibold text-ink-muted">${escapeHtml(formatDateFullIndo(statusData.tanggal))} • ${escapeHtml(formatTimeHm(statusData.waktu_wib))} WIB</span>
                             ${badgeOperasional(statusData.status_jam_operasional)}
                         </div>
-                        ${configWarning ? `<p class="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800">${escapeHtml(configWarning)}</p>` : ''}
+                        ${configWarning ? `<p class="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900">${escapeHtml(configWarning)}</p>` : ''}
                     </div>
                 ` : ''}
 
@@ -87,10 +87,10 @@ export function mountOperatingHoursView(container) {
                     })}
                 ` : `
                     <div class="grid gap-6 lg:grid-cols-2">
-                        <div class="wn-card space-y-4 p-5">
+                        <div class="wn-card space-y-4 p-4 sm:p-5">
                             <div class="flex items-center justify-between">
-                                <h2 class="text-base font-bold text-slate-900">Jadwal Mingguan</h2>
-                                <span class="text-xs font-semibold ${configComplete ? 'text-emerald-700' : 'text-amber-700'}">${weeklyList.length}/7 hari</span>
+                                <h2 class="text-base font-bold text-ink">Jadwal Mingguan</h2>
+                                <span class="text-xs font-semibold ${configComplete ? 'text-success' : 'text-warning'}">${weeklyList.length}/7 hari</span>
                             </div>
 
                             ${weeklyList.length === 0 ? renderEmptyState({
@@ -98,19 +98,19 @@ export function mountOperatingHoursView(container) {
                                 title: 'Belum ada jadwal mingguan',
                                 message: ownerMode ? 'Tambahkan jadwal 7 hari agar status operasional akurat.' : 'Jadwal operasional belum diatur oleh Owner.',
                             }) : `
-                                <div class="divide-y divide-slate-200 rounded-lg border border-slate-200">
+                                <div class="divide-y divide-border-subtle rounded-lg border border-border-subtle">
                                     ${weeklyList.map((row) => `
-                                        <div class="flex items-center justify-between gap-3 px-3.5 py-2.5 text-sm">
+                                        <div class="flex flex-col gap-2 px-3.5 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between">
                                             <div>
-                                                <span class="font-semibold capitalize text-slate-900">${escapeHtml(row.hari)}</span>
-                                                <span class="ml-2 text-xs tabular-nums ${row.status_buka ? 'text-emerald-700' : 'text-slate-500'}">
+                                                <span class="font-semibold capitalize text-ink">${escapeHtml(row.hari)}</span>
+                                                <span class="ml-2 text-xs tabular-nums ${row.status_buka ? 'font-medium text-success' : 'text-ink-muted'}">
                                                     ${row.status_buka ? `${escapeHtml(formatTimeHm(row.jam_buka))} – ${escapeHtml(formatTimeHm(row.jam_tutup))} WIB` : 'Tutup'}
                                                 </span>
                                             </div>
                                             ${ownerMode ? `
-                                                <div class="flex gap-2.5">
-                                                    <button type="button" data-edit-weekly="${row.id_jam_operasional}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Ubah</button>
-                                                    <button type="button" data-del-weekly="${row.id_jam_operasional}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Hapus</button>
+                                                <div class="flex flex-wrap gap-2">
+                                                    <button type="button" data-edit-weekly="${row.id_jam_operasional}" class="wn-link inline-flex min-h-[32px] items-center rounded-md px-2 text-xs hover:bg-primary-soft">Ubah</button>
+                                                    <button type="button" data-del-weekly="${row.id_jam_operasional}" class="inline-flex min-h-[32px] items-center rounded-md px-2 text-xs font-semibold text-danger hover:bg-red-50">Hapus</button>
                                                 </div>
                                             ` : ''}
                                         </div>
@@ -119,62 +119,62 @@ export function mountOperatingHoursView(container) {
                             `}
 
                             ${ownerMode ? `
-                                <form id="weekly-form" class="space-y-3 border-t border-slate-100 pt-4">
-                                    <div class="flex items-center justify-between">
-                                        <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">${editingWeekly ? `Ubah Jadwal (${escapeHtml(editingWeekly.hari)})` : 'Tambah Jadwal Hari'}</h3>
-                                        ${editingWeekly ? `<button type="button" id="cancel-edit-weekly" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal Edit</button>` : ''}
+                                <form id="weekly-form" class="space-y-3 border-t border-border-subtle pt-4">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <h3 class="text-xs font-bold uppercase tracking-wide text-ink">${editingWeekly ? `Ubah Jadwal (${escapeHtml(editingWeekly.hari)})` : 'Tambah Jadwal Hari'}</h3>
+                                        ${editingWeekly ? `<button type="button" id="cancel-edit-weekly" class="text-xs font-medium text-ink-muted hover:text-ink">Batal Edit</button>` : ''}
                                     </div>
                                     ${!editingWeekly ? `
                                         <select id="weekly-hari" required class="wn-select capitalize">
                                             ${unconfiguredDays.length > 0 ? unconfiguredDays.map((d) => `<option value="${d}">${escapeHtml(d)}</option>`).join('') : '<option value="" disabled selected>Semua 7 hari sudah terkonfigurasi</option>'}
                                         </select>
                                     ` : ''}
-                                    <label class="flex items-center gap-2 text-sm text-slate-700">
-                                        <input id="weekly-open" type="checkbox" ${(editingWeekly ? editingWeekly.status_buka : true) ? 'checked' : ''} class="rounded border-slate-300 text-teal-700" />
+                                    <label class="flex items-center gap-2 text-sm text-ink">
+                                        <input id="weekly-open" type="checkbox" ${(editingWeekly ? editingWeekly.status_buka : true) ? 'checked' : ''} class="wn-checkbox" />
                                         <span>Buka pada hari ini</span>
                                     </label>
-                                    <div class="grid grid-cols-2 gap-3">
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                         <div>
-                                            <label class="wn-label">Jam Buka</label>
+                                            <label for="weekly-start" class="wn-label">Jam Buka</label>
                                             <input id="weekly-start" type="time" value="${escapeHtml(editingWeekly?.jam_buka ? String(editingWeekly.jam_buka).slice(0, 5) : '08:00')}" class="wn-input" />
                                         </div>
                                         <div>
-                                            <label class="wn-label">Jam Tutup (Maks. 21.00)</label>
+                                            <label for="weekly-end" class="wn-label">Jam Tutup (Maks. 21.00)</label>
                                             <input id="weekly-end" type="time" max="21:00" value="${escapeHtml(editingWeekly?.jam_tutup ? String(editingWeekly.jam_tutup).slice(0, 5) : '20:00')}" class="wn-input" />
                                         </div>
                                     </div>
-                                    <button type="submit" ${isSubmitting || (!editingWeekly && unconfiguredDays.length === 0) ? 'disabled' : ''} class="wn-btn-primary text-xs">
+                                    <button type="submit" ${isSubmitting || (!editingWeekly && unconfiguredDays.length === 0) ? 'disabled' : ''} class="wn-btn-primary w-full text-xs sm:w-auto">
                                         ${editingWeekly ? 'Simpan Jadwal' : 'Tambah Jadwal'}
                                     </button>
                                 </form>
                             ` : ''}
                         </div>
 
-                        <div class="wn-card space-y-4 p-5">
-                            <h2 class="text-base font-bold text-slate-900">Pengecualian Tanggal</h2>
+                        <div class="wn-card space-y-4 p-4 sm:p-5">
+                            <h2 class="text-base font-bold text-ink">Pengecualian Tanggal</h2>
 
                             ${exceptionsList.length === 0 ? renderEmptyState({
                                 kind: 'empty',
                                 title: 'Belum ada pengecualian tanggal',
                             }) : `
-                                <div class="divide-y divide-slate-200 rounded-lg border border-slate-200">
+                                <div class="divide-y divide-border-subtle rounded-lg border border-border-subtle">
                                     ${exceptionsList.map((exc) => `
-                                        <div class="flex items-start justify-between gap-3 px-3.5 py-2.5 text-sm">
-                                            <div>
-                                                <div class="font-semibold text-slate-900">
-                                                    ${escapeHtml(formatDateIndo(exc.tanggal))}
-                                                    <span class="ml-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${exc.jenis_pengecualian === 'libur' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-800'}">
+                                        <div class="flex flex-col gap-2 px-3.5 py-2.5 text-sm sm:flex-row sm:items-start sm:justify-between">
+                                            <div class="min-w-0">
+                                                <div class="flex flex-wrap items-center gap-2 font-semibold text-ink">
+                                                    <span>${escapeHtml(formatDateIndo(exc.tanggal))}</span>
+                                                    <span class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${exc.jenis_pengecualian === 'libur' ? 'bg-red-50 text-danger' : 'bg-amber-50 text-warning'}">
                                                         ${escapeHtml(exc.jenis_pengecualian === 'libur' ? 'Libur' : 'Jam Khusus')}
                                                     </span>
                                                 </div>
-                                                <p class="text-xs text-slate-600">
+                                                <p class="mt-0.5 text-xs text-ink-muted">
                                                     ${exc.jenis_pengecualian === 'jam_khusus' ? `${escapeHtml(formatTimeHm(exc.jam_buka))}–${escapeHtml(formatTimeHm(exc.jam_tutup))} WIB • ` : ''}${escapeHtml(exc.keterangan)}
                                                 </p>
                                             </div>
                                             ${ownerMode ? `
-                                                <div class="flex gap-2.5">
-                                                    <button type="button" data-edit-exc="${exc.id_pengecualian}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Ubah</button>
-                                                    <button type="button" data-del-exc="${exc.id_pengecualian}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Hapus</button>
+                                                <div class="flex flex-wrap gap-2 shrink-0">
+                                                    <button type="button" data-edit-exc="${exc.id_pengecualian}" class="wn-link inline-flex min-h-[32px] items-center rounded-md px-2 text-xs hover:bg-primary-soft">Ubah</button>
+                                                    <button type="button" data-del-exc="${exc.id_pengecualian}" class="inline-flex min-h-[32px] items-center rounded-md px-2 text-xs font-semibold text-danger hover:bg-red-50">Hapus</button>
                                                 </div>
                                             ` : ''}
                                         </div>
@@ -183,39 +183,39 @@ export function mountOperatingHoursView(container) {
                             `}
 
                             ${ownerMode ? `
-                                <form id="exc-form" class="space-y-3 border-t border-slate-100 pt-4">
-                                    <div class="flex items-center justify-between">
-                                        <h3 class="text-xs font-bold uppercase tracking-wide text-slate-700">${editingException ? `Ubah Pengecualian (${escapeHtml(formatDateIndo(editingException.tanggal))})` : 'Tambah Pengecualian'}</h3>
-                                        ${editingException ? `<button type="button" id="cancel-edit-exc" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal Edit</button>` : ''}
+                                <form id="exc-form" class="space-y-3 border-t border-border-subtle pt-4">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <h3 class="text-xs font-bold uppercase tracking-wide text-ink">${editingException ? `Ubah Pengecualian (${escapeHtml(formatDateIndo(editingException.tanggal))})` : 'Tambah Pengecualian'}</h3>
+                                        ${editingException ? `<button type="button" id="cancel-edit-exc" class="text-xs font-medium text-ink-muted hover:text-ink">Batal Edit</button>` : ''}
                                     </div>
-                                    <div class="grid grid-cols-2 gap-3">
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                                         <div>
-                                            <label class="wn-label">Tanggal</label>
+                                            <label for="exc-date" class="wn-label">Tanggal</label>
                                             <input id="exc-date" type="date" required value="${escapeHtml(editingException ? formatDateOnly(editingException.tanggal) : '')}" class="wn-input" />
                                         </div>
                                         <div>
-                                            <label class="wn-label">Jenis</label>
+                                            <label for="exc-type" class="wn-label">Jenis</label>
                                             <select id="exc-type" class="wn-select">
                                                 <option value="libur" ${editingException?.jenis_pengecualian !== 'jam_khusus' ? 'selected' : ''}>Hari Libur (Tutup)</option>
                                                 <option value="jam_khusus" ${editingException?.jenis_pengecualian === 'jam_khusus' ? 'selected' : ''}>Jam Khusus</option>
                                             </select>
                                         </div>
                                     </div>
-                                    <div class="grid grid-cols-2 gap-3">
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                                         <div>
-                                            <label class="wn-label">Jam Buka (Jam Khusus)</label>
+                                            <label for="exc-start" class="wn-label">Jam Buka (Jam Khusus)</label>
                                             <input id="exc-start" type="time" value="${escapeHtml(editingException?.jam_buka ? String(editingException.jam_buka).slice(0, 5) : '09:00')}" class="wn-input" />
                                         </div>
                                         <div>
-                                            <label class="wn-label">Jam Tutup (Maks. 21.00)</label>
+                                            <label for="exc-end" class="wn-label">Jam Tutup (Maks. 21.00)</label>
                                             <input id="exc-end" type="time" max="21:00" value="${escapeHtml(editingException?.jam_tutup ? String(editingException.jam_tutup).slice(0, 5) : '17:00')}" class="wn-input" />
                                         </div>
                                     </div>
                                     <div>
-                                        <label class="wn-label">Keterangan</label>
+                                        <label for="exc-note" class="wn-label">Keterangan</label>
                                         <input id="exc-note" type="text" required minlength="3" value="${escapeHtml(editingException?.keterangan || '')}" placeholder="Contoh: Hari Raya / Perawatan Peralatan" class="wn-input" />
                                     </div>
-                                    <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary text-xs">
+                                    <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full text-xs sm:w-auto">
                                         ${editingException ? 'Simpan Pengecualian' : 'Tambah Pengecualian'}
                                     </button>
                                 </form>

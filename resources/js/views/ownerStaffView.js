@@ -9,6 +9,7 @@ import {
     renderErrorAlert,
     renderLoadingState,
     renderPageHeader,
+    renderPaginationBar,
 } from '../utils/formatters.js';
 
 export function mountOwnerStaffView(container) {
@@ -91,26 +92,49 @@ export function mountOwnerStaffView(container) {
                                     })}
                                 </div>
                             ` : `
-                                <div class="overflow-x-auto">
-                                    <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                <div class="divide-y divide-border-subtle md:hidden">
+                                    ${rows.map((row) => `
+                                        <div class="space-y-3 p-4">
+                                            <div class="flex items-start justify-between gap-2">
+                                                <div class="flex items-center gap-3 min-w-0">
+                                                    <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${row.status_aktif ? 'bg-primary-soft text-primary' : 'bg-slate-100 text-ink-muted'} text-xs font-bold">
+                                                        ${escapeHtml(getInitials(row.nama_lengkap))}
+                                                    </div>
+                                                    <div class="min-w-0">
+                                                        <div class="truncate font-semibold ${row.status_aktif ? 'text-ink' : 'text-ink-muted line-through'}">${escapeHtml(row.nama_lengkap)}</div>
+                                                        <div class="truncate font-mono text-xs text-ink-muted">@${escapeHtml(row.username)} • ${escapeHtml(formatDateTimeWib(row.created_at))}</div>
+                                                    </div>
+                                                </div>
+                                                ${badgeStatusAktif(Boolean(row.status_aktif))}
+                                            </div>
+                                            <div class="flex flex-wrap gap-2">
+                                                <button type="button" data-k-action="edit" data-k-id="${row.id_pengguna}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Edit Nama</button>
+                                                <button type="button" data-k-action="status" data-k-id="${row.id_pengguna}" class="inline-flex min-h-[34px] items-center rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-warning hover:bg-amber-100">${row.status_aktif ? 'Nonaktifkan' : 'Aktifkan'}</button>
+                                                <button type="button" data-k-action="reset" data-k-id="${row.id_pengguna}" class="inline-flex min-h-[34px] items-center rounded-md border border-border-subtle bg-surface px-3 text-xs font-semibold text-ink hover:bg-app-bg">Reset Sandi</button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <div class="hidden overflow-x-auto md:block">
+                                    <table class="min-w-full divide-y divide-border-subtle text-left text-sm">
+                                        <thead class="bg-app-bg text-xs font-semibold uppercase tracking-wide text-ink-muted">
                                             <tr>
                                                 <th class="px-4 py-3">Kasir</th>
                                                 <th class="px-4 py-3">Status</th>
                                                 <th class="px-4 py-3 text-right">Aksi</th>
                                             </tr>
                                         </thead>
-                                <tbody class="divide-y divide-slate-200">
+                                        <tbody class="divide-y divide-border-subtle">
                                             ${rows.map((row) => `
-                                                <tr class="hover:bg-slate-50">
+                                                <tr class="hover:bg-app-bg/50">
                                                     <td class="px-4 py-3">
                                                         <div class="flex items-center gap-3">
-                                                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${row.status_aktif ? 'bg-teal-50 text-teal-800' : 'bg-slate-100 text-slate-500'} text-xs font-bold">
+                                                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${row.status_aktif ? 'bg-primary-soft text-primary' : 'bg-slate-100 text-ink-muted'} text-xs font-bold">
                                                                 ${escapeHtml(getInitials(row.nama_lengkap))}
                                                             </div>
                                                             <div>
-                                                                <div class="font-semibold ${row.status_aktif ? 'text-slate-900' : 'text-slate-400 line-through'}">${escapeHtml(row.nama_lengkap)}</div>
-                                                                <div class="font-mono text-xs text-slate-500">@${escapeHtml(row.username)} • ${escapeHtml(formatDateTimeWib(row.created_at))}</div>
+                                                                <div class="font-semibold ${row.status_aktif ? 'text-ink' : 'text-ink-muted line-through'}">${escapeHtml(row.nama_lengkap)}</div>
+                                                                <div class="font-mono text-xs text-ink-muted">@${escapeHtml(row.username)} • ${escapeHtml(formatDateTimeWib(row.created_at))}</div>
                                                             </div>
                                                         </div>
                                                     </td>
@@ -118,9 +142,9 @@ export function mountOwnerStaffView(container) {
                                                         ${badgeStatusAktif(Boolean(row.status_aktif))}
                                                     </td>
                                                     <td class="px-4 py-3 text-right space-x-2.5 whitespace-nowrap">
-                                                        <button type="button" data-k-action="edit" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Edit Nama</button>
-                                                        <button type="button" data-k-action="status" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-amber-700 hover:text-amber-900">${row.status_aktif ? 'Nonaktifkan' : 'Aktifkan'}</button>
-                                                        <button type="button" data-k-action="reset" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-slate-700 hover:text-slate-900">Reset Sandi</button>
+                                                        <button type="button" data-k-action="edit" data-k-id="${row.id_pengguna}" class="wn-link text-xs">Edit Nama</button>
+                                                        <button type="button" data-k-action="status" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-warning hover:text-amber-800">${row.status_aktif ? 'Nonaktifkan' : 'Aktifkan'}</button>
+                                                        <button type="button" data-k-action="reset" data-k-id="${row.id_pengguna}" class="text-xs font-semibold text-brand-navy hover:text-primary">Reset Sandi</button>
                                                     </td>
                                                 </tr>
                                             `).join('')}
@@ -128,36 +152,28 @@ export function mountOwnerStaffView(container) {
                                     </table>
                                 </div>
                             `}
-                            ${kasirPage && kasirPage.last_page > 1 ? `
-                                <div class="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                                    <span>Halaman ${kasirPage.current_page} dari ${kasirPage.last_page} (${kasirPage.total} akun)</span>
-                                    <div class="flex gap-2">
-                                        <button type="button" data-kasir-page="${kasirPage.current_page - 1}" ${kasirPage.current_page <= 1 ? 'disabled' : ''} class="wn-btn-secondary px-3 py-1.5 text-xs">Sebelumnya</button>
-                                        <button type="button" data-kasir-page="${kasirPage.current_page + 1}" ${kasirPage.current_page >= kasirPage.last_page ? 'disabled' : ''} class="wn-btn-secondary px-3 py-1.5 text-xs">Berikutnya</button>
-                                    </div>
-                                </div>
-                            ` : ''}
+                            ${renderPaginationBar(kasirPage, 'data-kasir-page', 'akun')}
                         </div>
                     </div>
 
                     <div class="space-y-4">
                         ${selected && modalMode ? renderActionPanel(selected, modalMode) : `
                             <form id="kasir-create-form" class="wn-card space-y-3.5 p-5">
-                                <h3 class="text-sm font-bold text-slate-900">Buat Akun Kasir</h3>
+                                <h3 class="text-sm font-bold text-ink">Buat Akun Kasir</h3>
                                 <div>
-                                    <label for="new-k-name" class="wn-label">Nama Lengkap <span class="text-rose-600">*</span></label>
+                                    <label for="new-k-name" class="wn-label">Nama Lengkap <span class="text-danger">*</span></label>
                                     <input id="new-k-name" type="text" required minlength="2" class="wn-input" />
                                 </div>
                                 <div>
-                                    <label for="new-k-user" class="wn-label">Username <span class="text-rose-600">*</span> <span class="font-normal text-slate-400">(3–100 huruf/angka/._-)</span></label>
+                                    <label for="new-k-user" class="wn-label">Username <span class="text-danger">*</span> <span class="font-normal text-ink-muted">(3–100 huruf/angka/._-)</span></label>
                                     <input id="new-k-user" type="text" required minlength="3" class="wn-input" />
                                 </div>
                                 <div>
-                                    <label for="new-k-pass" class="wn-label">Kata Sandi <span class="text-rose-600">*</span> <span class="font-normal text-slate-400">(Min. 8 karakter)</span></label>
+                                    <label for="new-k-pass" class="wn-label">Kata Sandi <span class="text-danger">*</span> <span class="font-normal text-ink-muted">(Min. 8 karakter)</span></label>
                                     <input id="new-k-pass" type="password" required minlength="8" class="wn-input" />
                                 </div>
                                 <div>
-                                    <label for="new-k-pass-conf" class="wn-label">Konfirmasi Kata Sandi <span class="text-rose-600">*</span></label>
+                                    <label for="new-k-pass-conf" class="wn-label">Konfirmasi Kata Sandi <span class="text-danger">*</span></label>
                                     <input id="new-k-pass-conf" type="password" required minlength="8" class="wn-input" />
                                 </div>
                                 <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full">Tambah Kasir</button>

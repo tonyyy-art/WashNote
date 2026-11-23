@@ -10,6 +10,7 @@ import {
     renderErrorAlert,
     renderLoadingState,
     renderPageHeader,
+    renderPaginationBar,
     todayWibDateString,
 } from '../utils/formatters.js';
 
@@ -68,13 +69,13 @@ export function mountOwnerFinanceView(container) {
 
                 ${errorObj && hasAnyData ? renderErrorAlert(errorObj) : ''}
 
-                <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
+                <div class="flex flex-wrap gap-2 border-b border-border-subtle pb-2">
                     ${[
                         ['reports', 'Laporan Harian'],
                         ['expenses', 'Pengeluaran'],
                         ['categories', 'Kategori Pengeluaran'],
                     ].map(([tab, label]) => `
-                        <button type="button" data-fin-tab="${tab}" class="rounded-lg px-3.5 py-2 text-xs font-semibold transition ${activeTab === tab ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'}">
+                        <button type="button" data-fin-tab="${tab}" class="min-h-[38px] rounded-lg px-3.5 py-2 text-xs font-semibold transition ${activeTab === tab ? 'bg-brand-navy text-white shadow-xs' : 'bg-surface text-ink-muted ring-1 ring-border-subtle hover:bg-app-bg hover:text-ink'}">
                             ${escapeHtml(label)}
                         </button>
                     `).join('')}
@@ -117,8 +118,8 @@ export function mountOwnerFinanceView(container) {
 
         return `
             <div class="space-y-5">
-                <form id="report-filter-form" class="wn-card flex flex-wrap items-end justify-between gap-3 p-4">
-                    <div class="flex flex-wrap items-end gap-3">
+                <form id="report-filter-form" class="wn-card flex flex-col gap-3 p-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div class="grid gap-3 sm:grid-cols-3 sm:items-end">
                         <div>
                             <label for="rep-start" class="wn-label">Tanggal Mulai</label>
                             <input id="rep-start" type="date" required value="${escapeHtml(reportStart)}" class="wn-input" />
@@ -127,45 +128,45 @@ export function mountOwnerFinanceView(container) {
                             <label for="rep-end" class="wn-label">Tanggal Akhir</label>
                             <input id="rep-end" type="date" required value="${escapeHtml(reportEnd)}" class="wn-input" />
                         </div>
-                        <button type="submit" class="wn-btn-primary">Tampilkan Laporan</button>
+                        <button type="submit" class="wn-btn-primary w-full sm:w-auto">Tampilkan Laporan</button>
                     </div>
                     <div class="flex flex-wrap items-center gap-1.5">
-                        <button type="button" data-rep-preset="today" class="wn-btn-secondary px-3 py-1.5 text-xs">Hari Ini</button>
-                        <button type="button" data-rep-preset="7d" class="wn-btn-secondary px-3 py-1.5 text-xs">7 Hari</button>
-                        <button type="button" data-rep-preset="month" class="wn-btn-secondary px-3 py-1.5 text-xs">Bulan Ini</button>
+                        <button type="button" data-rep-preset="today" class="wn-btn-secondary min-h-[36px] flex-1 px-3 py-1.5 text-xs sm:flex-none">Hari Ini</button>
+                        <button type="button" data-rep-preset="7d" class="wn-btn-secondary min-h-[36px] flex-1 px-3 py-1.5 text-xs sm:flex-none">7 Hari</button>
+                        <button type="button" data-rep-preset="month" class="wn-btn-secondary min-h-[36px] flex-1 px-3 py-1.5 text-xs sm:flex-none">Bulan Ini</button>
                     </div>
                 </form>
 
                 ${reportSummary ? `
                     <div class="grid gap-4 lg:grid-cols-3">
-                        <div class="rounded-2xl bg-slate-900 p-5 text-white shadow-sm">
-                            <p class="text-xs font-medium text-slate-300">Selisih Pendapatan & Pengeluaran</p>
+                        <div class="wn-card-navy p-5">
+                            <p class="text-xs font-medium text-blue-100/90">Selisih Pendapatan & Pengeluaran</p>
                             <p class="mt-2 text-2xl font-bold tabular-nums">${escapeHtml(`${selisihSign}${formatRupiah(Math.abs(selisih))}`)}</p>
-                            <p class="mt-1 text-xs text-slate-300">Pendapatan lunas dikurangi pengeluaran aktif (${escapeHtml(formatDateIndo(reportStart))} – ${escapeHtml(formatDateIndo(reportEnd))})</p>
+                            <p class="mt-1 text-xs text-blue-100/80">Pendapatan lunas dikurangi pengeluaran aktif (${escapeHtml(formatDateIndo(reportStart))} – ${escapeHtml(formatDateIndo(reportEnd))})</p>
                         </div>
 
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:col-span-2">
                             <div class="wn-card p-4">
-                                <p class="text-xs font-medium text-slate-500">Total Pendapatan</p>
-                                <p class="mt-2 text-xl font-bold text-emerald-700 tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pendapatan))}</p>
-                                <p class="mt-1 text-xs text-slate-500">Berdasarkan pembayaran lunas</p>
+                                <p class="text-xs font-medium text-ink-muted">Total Pendapatan</p>
+                                <p class="mt-2 text-xl font-bold text-success tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pendapatan))}</p>
+                                <p class="mt-1 text-xs text-ink-muted">Berdasarkan pembayaran lunas</p>
                             </div>
                             <div class="wn-card p-4">
-                                <p class="text-xs font-medium text-slate-500">Total Pengeluaran Aktif</p>
-                                <p class="mt-2 text-xl font-bold text-rose-700 tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pengeluaran))}</p>
-                                <p class="mt-1 text-xs text-slate-500">Pengeluaran batal dikecualikan</p>
+                                <p class="text-xs font-medium text-ink-muted">Total Pengeluaran Aktif</p>
+                                <p class="mt-2 text-xl font-bold text-danger tabular-nums">${escapeHtml(formatRupiah(reportSummary.total_pengeluaran))}</p>
+                                <p class="mt-1 text-xs text-ink-muted">Pengeluaran batal dikecualikan</p>
                             </div>
                             <div class="wn-card p-4">
-                                <p class="text-xs font-medium text-slate-500">Jumlah Kendaraan</p>
-                                <p class="mt-2 text-xl font-bold text-slate-900 tabular-nums">${reportSummary.jumlah_kendaraan ?? 0}</p>
-                                <p class="mt-1 text-xs text-slate-500">Transaksi aktif non-batal</p>
+                                <p class="text-xs font-medium text-ink-muted">Jumlah Kendaraan</p>
+                                <p class="mt-2 text-xl font-bold text-ink tabular-nums">${reportSummary.jumlah_kendaraan ?? 0}</p>
+                                <p class="mt-1 text-xs text-ink-muted">Transaksi aktif non-batal</p>
                             </div>
                         </div>
                     </div>
                 ` : ''}
 
                 <div class="wn-card overflow-hidden">
-                    <div class="border-b border-slate-200 px-4 py-3 text-sm font-bold text-slate-900">Rincian Harian (WIB)</div>
+                    <div class="border-b border-border-subtle px-4 py-3 text-sm font-bold text-ink">Rincian Harian (WIB)</div>
                     ${reportDaily.length === 0 || !hasPeriodActivity ? `
                         <div class="p-4">
                             ${renderEmptyState({
@@ -175,9 +176,33 @@ export function mountOwnerFinanceView(container) {
                             })}
                         </div>
                     ` : `
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <div class="divide-y divide-border-subtle md:hidden">
+                            ${reportDaily.map((d) => `
+                                <div class="space-y-2 p-4 text-xs">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-bold text-ink">${escapeHtml(formatDateIndo(d.tanggal))}</span>
+                                        <span class="rounded-full bg-app-bg px-2.5 py-0.5 font-semibold text-ink-muted tabular-nums">${d.jumlah_kendaraan ?? 0} kendaraan</span>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2 rounded-lg bg-app-bg p-2.5">
+                                        <div>
+                                            <p class="text-[11px] text-ink-muted">Pendapatan</p>
+                                            <p class="font-semibold text-success tabular-nums">${escapeHtml(formatRupiah(d.pendapatan))}</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-[11px] text-ink-muted">Pengeluaran</p>
+                                            <p class="font-semibold text-danger tabular-nums">${escapeHtml(formatRupiah(d.pengeluaran))}</p>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="text-[11px] text-ink-muted">Selisih</p>
+                                            <p class="font-bold text-ink tabular-nums">${escapeHtml(formatRupiah(d.keuntungan_bersih))}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="hidden overflow-x-auto md:block">
+                            <table class="min-w-full divide-y divide-border-subtle text-left text-sm">
+                                <thead class="bg-app-bg text-xs font-semibold uppercase tracking-wide text-ink-muted">
                                     <tr>
                                         <th class="px-4 py-3">Tanggal</th>
                                         <th class="px-4 py-3 text-right">Kendaraan</th>
@@ -186,14 +211,14 @@ export function mountOwnerFinanceView(container) {
                                         <th class="px-4 py-3 text-right">Selisih</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-200">
+                                <tbody class="divide-y divide-border-subtle">
                                     ${reportDaily.map((d) => `
-                                        <tr class="hover:bg-slate-50">
-                                            <td class="px-4 py-3 text-xs font-semibold text-slate-800">${escapeHtml(formatDateIndo(d.tanggal))}</td>
+                                        <tr class="hover:bg-app-bg/50">
+                                            <td class="px-4 py-3 text-xs font-semibold text-ink">${escapeHtml(formatDateIndo(d.tanggal))}</td>
                                             <td class="px-4 py-3 text-right tabular-nums">${d.jumlah_kendaraan ?? 0}</td>
-                                            <td class="px-4 py-3 text-right font-medium text-emerald-700 tabular-nums">${escapeHtml(formatRupiah(d.pendapatan))}</td>
-                                            <td class="px-4 py-3 text-right font-medium text-rose-700 tabular-nums">${escapeHtml(formatRupiah(d.pengeluaran))}</td>
-                                            <td class="px-4 py-3 text-right font-bold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(d.keuntungan_bersih))}</td>
+                                            <td class="px-4 py-3 text-right font-medium text-success tabular-nums">${escapeHtml(formatRupiah(d.pendapatan))}</td>
+                                            <td class="px-4 py-3 text-right font-medium text-danger tabular-nums">${escapeHtml(formatRupiah(d.pengeluaran))}</td>
+                                            <td class="px-4 py-3 text-right font-bold text-ink tabular-nums">${escapeHtml(formatRupiah(d.keuntungan_bersih))}</td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
@@ -223,14 +248,14 @@ export function mountOwnerFinanceView(container) {
         return `
             <div class="grid gap-6 lg:grid-cols-3">
                 <div class="wn-card overflow-hidden lg:col-span-2">
-                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
-                        <div class="inline-flex rounded-lg bg-slate-100 p-1 text-xs font-semibold">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-4 py-3">
+                        <div class="inline-flex flex-wrap gap-1 rounded-lg bg-app-bg p-1 text-xs font-semibold">
                             ${[
                                 ['all', `Semua (${allRows.length})`],
                                 ['aktif', `Aktif (${allRows.filter((r) => r.status_pengeluaran !== 'dibatalkan').length})`],
                                 ['dibatalkan', `Dibatalkan (${allRows.filter((r) => r.status_pengeluaran === 'dibatalkan').length})`],
                             ].map(([st, label]) => `
-                                <button type="button" data-exp-status="${st}" class="rounded-md px-3 py-1 transition ${expenseStatusFilter === st ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
+                                <button type="button" data-exp-status="${st}" class="min-h-[32px] rounded-md px-3 py-1 transition ${expenseStatusFilter === st ? 'bg-surface text-ink shadow-xs' : 'text-ink-muted hover:text-ink'}">
                                     ${escapeHtml(label)}
                                 </button>
                             `).join('')}
@@ -252,9 +277,36 @@ export function mountOwnerFinanceView(container) {
                             })}
                         </div>
                     ` : `
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <div class="divide-y divide-border-subtle md:hidden">
+                            ${rows.map((exp) => {
+                                const isVoid = exp.status_pengeluaran === 'dibatalkan';
+                                return `
+                                    <div class="space-y-2 p-4">
+                                        <div class="flex items-start justify-between gap-2">
+                                            <div class="min-w-0">
+                                                <div class="font-semibold ${isVoid ? 'text-ink-muted line-through' : 'text-ink'}">${escapeHtml(exp.deskripsi)}</div>
+                                                <div class="text-xs text-ink-muted">${escapeHtml(formatDateIndo(exp.tanggal_pengeluaran))} • ${escapeHtml(exp.kategori?.nama_kategori || '-')} • ${escapeHtml(exp.pengguna?.nama_lengkap || '-')}</div>
+                                            </div>
+                                            <div class="text-right font-bold tabular-nums ${isVoid ? 'text-ink-muted line-through' : 'text-danger'}">
+                                                ${isVoid ? escapeHtml(formatRupiah(exp.nominal)) : `- ${escapeHtml(formatRupiah(exp.nominal))}`}
+                                            </div>
+                                        </div>
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            ${isVoid ? '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-danger ring-1 ring-inset ring-red-600/20">Dibatalkan</span>' : badgeStatusAktif(true)}
+                                            ${!isVoid ? `
+                                                <div class="flex flex-wrap gap-2">
+                                                    <button type="button" data-edit-exp="${exp.id_pengeluaran}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Ubah</button>
+                                                    <button type="button" data-cancel-exp="${exp.id_pengeluaran}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Batalkan</button>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <div class="hidden overflow-x-auto md:block">
+                            <table class="min-w-full divide-y divide-border-subtle text-left text-sm">
+                                <thead class="bg-app-bg text-xs font-semibold uppercase tracking-wide text-ink-muted">
                                     <tr>
                                         <th class="px-4 py-3">Tanggal & Deskripsi</th>
                                         <th class="px-4 py-3">Kategori</th>
@@ -263,26 +315,26 @@ export function mountOwnerFinanceView(container) {
                                         <th class="px-4 py-3 text-right">Aksi</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-200">
+                                <tbody class="divide-y divide-border-subtle">
                                     ${rows.map((exp) => {
                                         const isVoid = exp.status_pengeluaran === 'dibatalkan';
                                         return `
-                                            <tr class="hover:bg-slate-50">
+                                            <tr class="hover:bg-app-bg/50">
                                                 <td class="px-4 py-3">
-                                                    <div class="font-semibold ${isVoid ? 'text-slate-400 line-through' : 'text-slate-900'}">${escapeHtml(exp.deskripsi)}</div>
-                                                    <div class="text-xs text-slate-500">${escapeHtml(formatDateIndo(exp.tanggal_pengeluaran))} • ${escapeHtml(exp.pengguna?.nama_lengkap || '-')}</div>
+                                                    <div class="font-semibold ${isVoid ? 'text-ink-muted line-through' : 'text-ink'}">${escapeHtml(exp.deskripsi)}</div>
+                                                    <div class="text-xs text-ink-muted">${escapeHtml(formatDateIndo(exp.tanggal_pengeluaran))} • ${escapeHtml(exp.pengguna?.nama_lengkap || '-')}</div>
                                                 </td>
-                                                <td class="px-4 py-3 text-xs text-slate-700">${escapeHtml(exp.kategori?.nama_kategori || '-')}</td>
-                                                <td class="px-4 py-3 text-right font-bold tabular-nums ${isVoid ? 'text-slate-400 line-through' : 'text-rose-700'}">
+                                                <td class="px-4 py-3 text-xs text-ink-muted">${escapeHtml(exp.kategori?.nama_kategori || '-')}</td>
+                                                <td class="px-4 py-3 text-right font-bold tabular-nums ${isVoid ? 'text-ink-muted line-through' : 'text-danger'}">
                                                     ${isVoid ? escapeHtml(formatRupiah(exp.nominal)) : `- ${escapeHtml(formatRupiah(exp.nominal))}`}
                                                 </td>
                                                 <td class="px-4 py-3">
-                                                    ${isVoid ? '<span class="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/20">Dibatalkan</span>' : badgeStatusAktif(true)}
+                                                    ${isVoid ? '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-danger ring-1 ring-inset ring-red-600/20">Dibatalkan</span>' : badgeStatusAktif(true)}
                                                 </td>
                                                 <td class="px-4 py-3 text-right space-x-2.5 whitespace-nowrap">
                                                     ${!isVoid ? `
-                                                        <button type="button" data-edit-exp="${exp.id_pengeluaran}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Ubah</button>
-                                                        <button type="button" data-cancel-exp="${exp.id_pengeluaran}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Batalkan</button>
+                                                        <button type="button" data-edit-exp="${exp.id_pengeluaran}" class="wn-link text-xs">Ubah</button>
+                                                        <button type="button" data-cancel-exp="${exp.id_pengeluaran}" class="text-xs font-semibold text-danger hover:text-red-800">Batalkan</button>
                                                     ` : '-'}
                                                 </td>
                                             </tr>
@@ -291,28 +343,20 @@ export function mountOwnerFinanceView(container) {
                                 </tbody>
                             </table>
                         </div>
-                        ${expensesPage && expensesPage.last_page > 1 ? `
-                            <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
-                                <span>Halaman ${expensesPage.current_page} dari ${expensesPage.last_page}</span>
-                                <div class="flex gap-2">
-                                    <button type="button" data-exp-page="${expensesPage.current_page - 1}" ${expensesPage.current_page <= 1 ? 'disabled' : ''} class="wn-btn-secondary px-3 py-1 text-xs">Sebelumnya</button>
-                                    <button type="button" data-exp-page="${expensesPage.current_page + 1}" ${expensesPage.current_page >= expensesPage.last_page ? 'disabled' : ''} class="wn-btn-secondary px-3 py-1 text-xs">Berikutnya</button>
-                                </div>
-                            </div>
-                        ` : ''}
+                        ${renderPaginationBar(expensesPage, 'data-exp-page', 'pengeluaran')}
                     `}
                 </div>
 
                 <div>
                     ${cancelling ? `
-                        <form id="exp-cancel-form" class="space-y-3.5 rounded-xl border border-rose-200 bg-white p-5">
+                        <form id="exp-cancel-form" class="space-y-3.5 rounded-xl border border-red-200 bg-surface p-5">
                             <div class="flex items-center justify-between">
-                                <h3 class="text-sm font-bold text-rose-800">Batalkan Pengeluaran</h3>
-                                <button type="button" id="exp-reset-mode" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>
+                                <h3 class="text-sm font-bold text-danger">Batalkan Pengeluaran</h3>
+                                <button type="button" id="exp-reset-mode" class="text-xs font-medium text-ink-muted hover:text-ink">Batal</button>
                             </div>
-                            <p class="text-xs text-slate-600">${escapeHtml(cancelling.deskripsi)} (${escapeHtml(formatRupiah(cancelling.nominal))})</p>
+                            <p class="text-xs text-ink-muted">${escapeHtml(cancelling.deskripsi)} (${escapeHtml(formatRupiah(cancelling.nominal))})</p>
                             <div>
-                                <label for="exp-cancel-reason" class="wn-label">Alasan Pembatalan <span class="text-rose-600">*</span> <span class="font-normal text-slate-500">(Min. 5 karakter)</span></label>
+                                <label for="exp-cancel-reason" class="wn-label">Alasan Pembatalan <span class="text-danger">*</span> <span class="font-normal text-ink-muted">(Min. 5 karakter)</span></label>
                                 <input id="exp-cancel-reason" type="text" required minlength="5" class="wn-input" />
                             </div>
                             <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-danger w-full">Batalkan (Soft Void)</button>
@@ -327,36 +371,36 @@ export function mountOwnerFinanceView(container) {
                     ` : `
                         <form id="exp-form" class="wn-card space-y-3.5 p-5">
                             <div class="flex items-center justify-between">
-                                <h3 class="text-sm font-bold text-slate-900">${editing ? 'Ubah Pengeluaran' : 'Catat Pengeluaran'}</h3>
-                                ${editing ? '<button type="button" id="exp-reset-mode" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>' : ''}
+                                <h3 class="text-sm font-bold text-ink">${editing ? 'Ubah Pengeluaran' : 'Catat Pengeluaran'}</h3>
+                                ${editing ? '<button type="button" id="exp-reset-mode" class="text-xs font-medium text-ink-muted hover:text-ink">Batal</button>' : ''}
                             </div>
                             <div>
-                                <label for="exp-cat" class="wn-label">Kategori <span class="text-rose-600">*</span></label>
+                                <label for="exp-cat" class="wn-label">Kategori <span class="text-danger">*</span></label>
                                 <select id="exp-cat" required class="wn-select">
                                     ${activeCategories.map((c) => `<option value="${c.id_kategori_pengeluaran}" ${Number(editing?.id_kategori_pengeluaran) === Number(c.id_kategori_pengeluaran) ? 'selected' : ''}>${escapeHtml(c.nama_kategori)}</option>`).join('')}
                                 </select>
                             </div>
                             <div>
-                                <label for="exp-date" class="wn-label">Tanggal <span class="text-rose-600">*</span></label>
+                                <label for="exp-date" class="wn-label">Tanggal <span class="text-danger">*</span></label>
                                 <input id="exp-date" type="date" required value="${escapeHtml(editing ? formatDateOnly(editing.tanggal_pengeluaran) : today)}" class="wn-input" />
                             </div>
                             <div>
-                                <label for="exp-desc" class="wn-label">Deskripsi <span class="text-rose-600">*</span></label>
+                                <label for="exp-desc" class="wn-label">Deskripsi <span class="text-danger">*</span></label>
                                 <input id="exp-desc" type="text" required value="${escapeHtml(editing?.deskripsi || '')}" placeholder="Contoh: Sabun cuci motor 5L" class="wn-input" />
                             </div>
                             <div>
-                                <label for="exp-nominal" class="wn-label">Nominal (Rp) <span class="text-rose-600">*</span></label>
+                                <label for="exp-nominal" class="wn-label">Nominal (Rp) <span class="text-danger">*</span></label>
                                 <input id="exp-nominal" type="number" min="1" step="1" required value="${escapeHtml(editing ? Number(editing.nominal) : '')}" class="wn-input tabular-nums" />
                             </div>
-                            <div class="rounded-lg bg-slate-50 px-3 py-2 text-xs">
-                                <div class="flex items-center justify-between text-slate-600">
+                            <div class="rounded-lg bg-app-bg px-3 py-2 text-xs">
+                                <div class="flex items-center justify-between text-ink-muted">
                                     <span>Dampak Kas Harian</span>
-                                    <span id="exp-preview-nominal" class="font-bold text-rose-700 tabular-nums">${editing ? `- ${escapeHtml(formatRupiah(editing.nominal))}` : '- Rp 0'}</span>
+                                    <span id="exp-preview-nominal" class="font-bold text-danger tabular-nums">${editing ? `- ${escapeHtml(formatRupiah(editing.nominal))}` : '- Rp 0'}</span>
                                 </div>
                             </div>
                             ${editing ? `
                                 <div>
-                                    <label for="exp-reason" class="wn-label">Alasan Perubahan <span class="text-rose-600">*</span> <span class="font-normal text-slate-500">(Min. 5 karakter)</span></label>
+                                    <label for="exp-reason" class="wn-label">Alasan Perubahan <span class="text-danger">*</span> <span class="font-normal text-ink-muted">(Min. 5 karakter)</span></label>
                                     <input id="exp-reason" type="text" required minlength="5" class="wn-input" />
                                 </div>
                             ` : ''}
@@ -385,23 +429,37 @@ export function mountOwnerFinanceView(container) {
                             })}
                         </div>
                     ` : `
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <div class="divide-y divide-border-subtle md:hidden">
+                            ${expenseCategories.map((c) => `
+                                <div class="flex flex-col gap-2 p-4">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <span class="font-semibold text-ink">${escapeHtml(c.nama_kategori)}</span>
+                                        ${badgeStatusAktif(Boolean(c.status_aktif))}
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button" data-edit-expcat="${c.id_kategori_pengeluaran}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Ubah</button>
+                                        ${c.status_aktif ? `<button type="button" data-del-expcat="${c.id_kategori_pengeluaran}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="hidden overflow-x-auto md:block">
+                            <table class="min-w-full divide-y divide-border-subtle text-left text-sm">
+                                <thead class="bg-app-bg text-xs font-semibold uppercase tracking-wide text-ink-muted">
                                     <tr>
                                         <th class="px-4 py-3">Nama Kategori</th>
                                         <th class="px-4 py-3">Status</th>
                                         <th class="px-4 py-3 text-right">Aksi</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-200">
+                                <tbody class="divide-y divide-border-subtle">
                                     ${expenseCategories.map((c) => `
-                                        <tr class="hover:bg-slate-50">
-                                            <td class="px-4 py-3 font-semibold text-slate-900">${escapeHtml(c.nama_kategori)}</td>
+                                        <tr class="hover:bg-app-bg/50">
+                                            <td class="px-4 py-3 font-semibold text-ink">${escapeHtml(c.nama_kategori)}</td>
                                             <td class="px-4 py-3">${badgeStatusAktif(Boolean(c.status_aktif))}</td>
                                             <td class="px-4 py-3 text-right space-x-2.5">
-                                                <button type="button" data-edit-expcat="${c.id_kategori_pengeluaran}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Ubah</button>
-                                                ${c.status_aktif ? `<button type="button" data-del-expcat="${c.id_kategori_pengeluaran}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Nonaktifkan</button>` : ''}
+                                                <button type="button" data-edit-expcat="${c.id_kategori_pengeluaran}" class="wn-link text-xs">Ubah</button>
+                                                ${c.status_aktif ? `<button type="button" data-del-expcat="${c.id_kategori_pengeluaran}" class="text-xs font-semibold text-danger hover:text-red-800">Nonaktifkan</button>` : ''}
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -413,15 +471,15 @@ export function mountOwnerFinanceView(container) {
 
                 <form id="expcat-form" class="wn-card space-y-3.5 self-start p-5">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-bold text-slate-900">${editing ? 'Ubah Kategori' : 'Tambah Kategori'}</h3>
-                        ${editing ? '<button type="button" id="cancel-expcat-edit" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>' : ''}
+                        <h3 class="text-sm font-bold text-ink">${editing ? 'Ubah Kategori' : 'Tambah Kategori'}</h3>
+                        ${editing ? '<button type="button" id="cancel-expcat-edit" class="text-xs font-medium text-ink-muted hover:text-ink">Batal</button>' : ''}
                     </div>
                     <div>
                         <label for="expcat-nama" class="wn-label">Nama Kategori</label>
                         <input id="expcat-nama" type="text" required value="${escapeHtml(editing?.nama_kategori || '')}" class="wn-input" />
                     </div>
-                    <label class="flex items-center gap-2 text-xs text-slate-700">
-                        <input id="expcat-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="rounded border-slate-300 text-teal-700" />
+                    <label class="flex items-center gap-2 text-xs text-ink">
+                        <input id="expcat-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="wn-checkbox" />
                         <span>Status Aktif</span>
                     </label>
                     <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full">Simpan Kategori</button>

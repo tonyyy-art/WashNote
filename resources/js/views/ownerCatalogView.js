@@ -55,13 +55,13 @@ export function mountOwnerCatalogView(container) {
 
                 ${errorObj && hasAnyData ? renderErrorAlert(errorObj) : ''}
 
-                <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
+                <div class="flex flex-wrap gap-2 border-b border-border-subtle pb-2">
                     ${[
                         ['categories', `Kategori Kendaraan (${categories.length})`],
                         ['services', `Layanan (${services.length})`],
                         ['tariffs', `Tarif & Batas Harga (${tariffs.length})`],
                     ].map(([tab, label]) => `
-                        <button type="button" data-cat-tab="${tab}" class="rounded-lg px-3.5 py-2 text-xs font-semibold transition ${activeTab === tab ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'}">
+                        <button type="button" data-cat-tab="${tab}" class="min-h-[38px] rounded-lg px-3.5 py-2 text-xs font-semibold transition ${activeTab === tab ? 'bg-brand-navy text-white shadow-xs' : 'bg-surface text-ink-muted ring-1 ring-border-subtle hover:bg-app-bg hover:text-ink'}">
                             ${escapeHtml(label)}
                         </button>
                     `).join('')}
@@ -99,9 +99,26 @@ export function mountOwnerCatalogView(container) {
                             })}
                         </div>
                     ` : `
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <div class="divide-y divide-border-subtle md:hidden">
+                            ${categories.map((cat) => `
+                                <div class="flex flex-col gap-2 p-4">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div>
+                                            <p class="font-semibold text-ink">${escapeHtml(cat.nama_kategori)}</p>
+                                            <p class="text-xs capitalize text-ink-muted">${escapeHtml(cat.jenis_kendaraan)}</p>
+                                        </div>
+                                        ${badgeStatusAktif(Boolean(cat.status_aktif))}
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button" data-edit-cat-row="${cat.id_kategori_kendaraan}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Ubah</button>
+                                        ${cat.status_aktif ? `<button type="button" data-del-cat-row="${cat.id_kategori_kendaraan}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="hidden overflow-x-auto md:block">
+                            <table class="min-w-full divide-y divide-border-subtle text-left text-sm">
+                                <thead class="bg-app-bg text-xs font-semibold uppercase tracking-wide text-ink-muted">
                                     <tr>
                                         <th class="px-4 py-3">Jenis</th>
                                         <th class="px-4 py-3">Nama Kategori</th>
@@ -109,15 +126,15 @@ export function mountOwnerCatalogView(container) {
                                         <th class="px-4 py-3 text-right">Aksi</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-200">
+                                <tbody class="divide-y divide-border-subtle">
                                     ${categories.map((cat) => `
-                                        <tr class="hover:bg-slate-50">
-                                            <td class="px-4 py-3 capitalize text-slate-700">${escapeHtml(cat.jenis_kendaraan)}</td>
-                                            <td class="px-4 py-3 font-semibold text-slate-900">${escapeHtml(cat.nama_kategori)}</td>
+                                        <tr class="hover:bg-app-bg/50">
+                                            <td class="px-4 py-3 capitalize text-ink-muted">${escapeHtml(cat.jenis_kendaraan)}</td>
+                                            <td class="px-4 py-3 font-semibold text-ink">${escapeHtml(cat.nama_kategori)}</td>
                                             <td class="px-4 py-3">${badgeStatusAktif(Boolean(cat.status_aktif))}</td>
                                             <td class="px-4 py-3 text-right space-x-2.5">
-                                                <button type="button" data-edit-cat-row="${cat.id_kategori_kendaraan}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Ubah</button>
-                                                ${cat.status_aktif ? `<button type="button" data-del-cat-row="${cat.id_kategori_kendaraan}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Nonaktifkan</button>` : ''}
+                                                <button type="button" data-edit-cat-row="${cat.id_kategori_kendaraan}" class="wn-link text-xs">Ubah</button>
+                                                ${cat.status_aktif ? `<button type="button" data-del-cat-row="${cat.id_kategori_kendaraan}" class="text-xs font-semibold text-danger hover:text-red-800">Nonaktifkan</button>` : ''}
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -129,8 +146,8 @@ export function mountOwnerCatalogView(container) {
 
                 <form id="cat-form" class="wn-card space-y-3.5 self-start p-5">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-bold text-slate-900">${editing ? 'Ubah Kategori' : 'Tambah Kategori'}</h3>
-                        ${editing ? '<button type="button" id="cancel-cat-edit" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>' : ''}
+                        <h3 class="text-sm font-bold text-ink">${editing ? 'Ubah Kategori' : 'Tambah Kategori'}</h3>
+                        ${editing ? '<button type="button" id="cancel-cat-edit" class="text-xs font-medium text-ink-muted hover:text-ink">Batal</button>' : ''}
                     </div>
                     <div>
                         <label for="cat-jenis" class="wn-label">Jenis Kendaraan</label>
@@ -140,11 +157,11 @@ export function mountOwnerCatalogView(container) {
                         </select>
                     </div>
                     <div>
-                        <label for="cat-nama" class="wn-label">Nama Kategori <span class="text-rose-600">*</span></label>
+                        <label for="cat-nama" class="wn-label">Nama Kategori <span class="text-danger">*</span></label>
                         <input id="cat-nama" type="text" required value="${escapeHtml(editing?.nama_kategori || '')}" placeholder="Mis. Motor Besar / Mobil SUV" class="wn-input" />
                     </div>
-                    <label class="flex items-center gap-2 text-xs text-slate-700">
-                        <input id="cat-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="rounded border-slate-300 text-teal-700" />
+                    <label class="flex items-center gap-2 text-xs text-ink">
+                        <input id="cat-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="wn-checkbox" />
                         <span>Status Aktif</span>
                     </label>
                     <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full">${editing ? 'Simpan Perubahan' : 'Tambah Kategori'}</button>
@@ -168,9 +185,29 @@ export function mountOwnerCatalogView(container) {
                             })}
                         </div>
                     ` : `
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <div class="divide-y divide-border-subtle md:hidden">
+                            ${services.map((srv) => `
+                                <div class="flex flex-col gap-2 p-4">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <p class="font-semibold text-ink">${escapeHtml(srv.nama_layanan)}</p>
+                                            ${srv.deskripsi ? `<p class="text-xs text-ink-muted">${escapeHtml(srv.deskripsi)}</p>` : ''}
+                                        </div>
+                                        <span class="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase ${srv.tipe_layanan === 'tambahan' ? 'bg-slate-100 text-brand-navy' : 'bg-primary-soft text-primary'}">${escapeHtml(srv.tipe_layanan || 'utama')}</span>
+                                    </div>
+                                    <div class="flex flex-wrap items-center justify-between gap-2">
+                                        ${badgeStatusAktif(Boolean(srv.status_aktif))}
+                                        <div class="flex flex-wrap gap-2">
+                                            <button type="button" data-edit-srv-row="${srv.id_layanan}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Ubah</button>
+                                            ${srv.status_aktif ? `<button type="button" data-del-srv-row="${srv.id_layanan}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="hidden overflow-x-auto md:block">
+                            <table class="min-w-full divide-y divide-border-subtle text-left text-sm">
+                                <thead class="bg-app-bg text-xs font-semibold uppercase tracking-wide text-ink-muted">
                                     <tr>
                                         <th class="px-4 py-3">Nama Layanan</th>
                                         <th class="px-4 py-3">Tipe</th>
@@ -178,20 +215,20 @@ export function mountOwnerCatalogView(container) {
                                         <th class="px-4 py-3 text-right">Aksi</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-200">
+                                <tbody class="divide-y divide-border-subtle">
                                     ${services.map((srv) => `
-                                        <tr class="hover:bg-slate-50">
+                                        <tr class="hover:bg-app-bg/50">
                                             <td class="px-4 py-3">
-                                                <div class="font-semibold text-slate-900">${escapeHtml(srv.nama_layanan)}</div>
-                                                ${srv.deskripsi ? `<div class="text-xs text-slate-500">${escapeHtml(srv.deskripsi)}</div>` : ''}
+                                                <div class="font-semibold text-ink">${escapeHtml(srv.nama_layanan)}</div>
+                                                ${srv.deskripsi ? `<div class="text-xs text-ink-muted">${escapeHtml(srv.deskripsi)}</div>` : ''}
                                             </td>
                                             <td class="px-4 py-3">
-                                                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase ${srv.tipe_layanan === 'tambahan' ? 'bg-indigo-50 text-indigo-700' : 'bg-teal-50 text-teal-800'}">${escapeHtml(srv.tipe_layanan || 'utama')}</span>
+                                                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase ${srv.tipe_layanan === 'tambahan' ? 'bg-slate-100 text-brand-navy' : 'bg-primary-soft text-primary'}">${escapeHtml(srv.tipe_layanan || 'utama')}</span>
                                             </td>
                                             <td class="px-4 py-3">${badgeStatusAktif(Boolean(srv.status_aktif))}</td>
                                             <td class="px-4 py-3 text-right space-x-2.5">
-                                                <button type="button" data-edit-srv-row="${srv.id_layanan}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Ubah</button>
-                                                ${srv.status_aktif ? `<button type="button" data-del-srv-row="${srv.id_layanan}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Nonaktifkan</button>` : ''}
+                                                <button type="button" data-edit-srv-row="${srv.id_layanan}" class="wn-link text-xs">Ubah</button>
+                                                ${srv.status_aktif ? `<button type="button" data-del-srv-row="${srv.id_layanan}" class="text-xs font-semibold text-danger hover:text-red-800">Nonaktifkan</button>` : ''}
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -203,11 +240,11 @@ export function mountOwnerCatalogView(container) {
 
                 <form id="srv-form" class="wn-card space-y-3.5 self-start p-5">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-bold text-slate-900">${editing ? 'Ubah Layanan' : 'Tambah Layanan'}</h3>
-                        ${editing ? '<button type="button" id="cancel-srv-edit" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>' : ''}
+                        <h3 class="text-sm font-bold text-ink">${editing ? 'Ubah Layanan' : 'Tambah Layanan'}</h3>
+                        ${editing ? '<button type="button" id="cancel-srv-edit" class="text-xs font-medium text-ink-muted hover:text-ink">Batal</button>' : ''}
                     </div>
                     <div>
-                        <label for="srv-nama" class="wn-label">Nama Layanan <span class="text-rose-600">*</span></label>
+                        <label for="srv-nama" class="wn-label">Nama Layanan <span class="text-danger">*</span></label>
                         <input id="srv-nama" type="text" required value="${escapeHtml(editing?.nama_layanan || '')}" placeholder="Mis. Cuci Salju / Semir Ban" class="wn-input" />
                     </div>
                     <div>
@@ -221,8 +258,8 @@ export function mountOwnerCatalogView(container) {
                         <label for="srv-desk" class="wn-label">Deskripsi (Opsional)</label>
                         <input id="srv-desk" type="text" value="${escapeHtml(editing?.deskripsi || '')}" class="wn-input" />
                     </div>
-                    <label class="flex items-center gap-2 text-xs text-slate-700">
-                        <input id="srv-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="rounded border-slate-300 text-teal-700" />
+                    <label class="flex items-center gap-2 text-xs text-ink">
+                        <input id="srv-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="wn-checkbox" />
                         <span>Status Aktif</span>
                     </label>
                     <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full">${editing ? 'Simpan Perubahan' : 'Tambah Layanan'}</button>
@@ -249,9 +286,30 @@ export function mountOwnerCatalogView(container) {
                             })}
                         </div>
                     ` : `
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-                                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <div class="divide-y divide-border-subtle md:hidden">
+                            ${tariffs.map((tar) => `
+                                <div class="space-y-2 p-4">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div>
+                                            <p class="font-semibold text-ink">${escapeHtml(tar.layanan?.nama_layanan || '-')}</p>
+                                            <p class="text-xs text-ink-muted">${escapeHtml(tar.kategori_kendaraan?.nama_kategori || '-')}</p>
+                                        </div>
+                                        ${badgeStatusAktif(Boolean(tar.status_aktif))}
+                                    </div>
+                                    <div class="flex flex-wrap items-baseline justify-between gap-2 rounded-lg bg-app-bg px-3 py-2 text-xs">
+                                        <span class="font-bold text-ink tabular-nums">${escapeHtml(formatRupiah(tar.harga_dasar))}</span>
+                                        <span class="text-ink-muted tabular-nums">Rentang: ${escapeHtml(formatRupiah(tar.batas_bawah))} – ${escapeHtml(formatRupiah(tar.batas_atas))}</span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button" data-edit-tar-row="${tar.id_harga}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-primary-border bg-primary-soft px-3 text-xs">Ubah</button>
+                                        ${tar.status_aktif ? `<button type="button" data-del-tar-row="${tar.id_harga}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="hidden overflow-x-auto md:block">
+                            <table class="min-w-full divide-y divide-border-subtle text-left text-sm">
+                                <thead class="bg-app-bg text-xs font-semibold uppercase tracking-wide text-ink-muted">
                                     <tr>
                                         <th class="px-4 py-3">Layanan & Kategori</th>
                                         <th class="px-4 py-3 text-right">Harga Dasar</th>
@@ -260,19 +318,19 @@ export function mountOwnerCatalogView(container) {
                                         <th class="px-4 py-3 text-right">Aksi</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-200">
+                                <tbody class="divide-y divide-border-subtle">
                                     ${tariffs.map((tar) => `
-                                        <tr class="hover:bg-slate-50">
+                                        <tr class="hover:bg-app-bg/50">
                                             <td class="px-4 py-3">
-                                                <div class="font-semibold text-slate-900">${escapeHtml(tar.layanan?.nama_layanan || '-')}</div>
-                                                <div class="text-xs text-slate-500">${escapeHtml(tar.kategori_kendaraan?.nama_kategori || '-')}</div>
+                                                <div class="font-semibold text-ink">${escapeHtml(tar.layanan?.nama_layanan || '-')}</div>
+                                                <div class="text-xs text-ink-muted">${escapeHtml(tar.kategori_kendaraan?.nama_kategori || '-')}</div>
                                             </td>
-                                            <td class="px-4 py-3 text-right font-bold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(tar.harga_dasar))}</td>
-                                            <td class="px-4 py-3 text-right text-xs text-slate-600 tabular-nums">${escapeHtml(formatRupiah(tar.batas_bawah))} – ${escapeHtml(formatRupiah(tar.batas_atas))}</td>
+                                            <td class="px-4 py-3 text-right font-bold text-ink tabular-nums">${escapeHtml(formatRupiah(tar.harga_dasar))}</td>
+                                            <td class="px-4 py-3 text-right text-xs text-ink-muted tabular-nums">${escapeHtml(formatRupiah(tar.batas_bawah))} – ${escapeHtml(formatRupiah(tar.batas_atas))}</td>
                                             <td class="px-4 py-3">${badgeStatusAktif(Boolean(tar.status_aktif))}</td>
                                             <td class="px-4 py-3 text-right space-x-2.5">
-                                                <button type="button" data-edit-tar-row="${tar.id_harga}" class="text-xs font-semibold text-teal-700 hover:text-teal-900">Ubah</button>
-                                                ${tar.status_aktif ? `<button type="button" data-del-tar-row="${tar.id_harga}" class="text-xs font-semibold text-rose-600 hover:text-rose-800">Nonaktifkan</button>` : ''}
+                                                <button type="button" data-edit-tar-row="${tar.id_harga}" class="wn-link text-xs">Ubah</button>
+                                                ${tar.status_aktif ? `<button type="button" data-del-tar-row="${tar.id_harga}" class="text-xs font-semibold text-danger hover:text-red-800">Nonaktifkan</button>` : ''}
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -297,8 +355,8 @@ export function mountOwnerCatalogView(container) {
                 ` : `
                     <form id="tar-form" class="wn-card space-y-3.5 self-start p-5">
                         <div class="flex items-center justify-between">
-                            <h3 class="text-sm font-bold text-slate-900">${editing ? 'Ubah Tarif Harga' : 'Tambah Tarif Harga'}</h3>
-                            ${editing ? '<button type="button" id="cancel-tar-edit" class="text-xs font-medium text-slate-500 hover:text-slate-800">Batal</button>' : ''}
+                            <h3 class="text-sm font-bold text-ink">${editing ? 'Ubah Tarif Harga' : 'Tambah Tarif Harga'}</h3>
+                            ${editing ? '<button type="button" id="cancel-tar-edit" class="text-xs font-medium text-ink-muted hover:text-ink">Batal</button>' : ''}
                         </div>
                         <div>
                             <label for="tar-layanan" class="wn-label">Layanan</label>
@@ -313,21 +371,21 @@ export function mountOwnerCatalogView(container) {
                             </select>
                         </div>
                         <div>
-                            <label for="tar-base" class="wn-label">Harga Dasar (Rp) <span class="text-rose-600">*</span></label>
+                            <label for="tar-base" class="wn-label">Harga Dasar (Rp) <span class="text-danger">*</span></label>
                             <input id="tar-base" type="number" min="0" required value="${escapeHtml(editing ? Number(editing.harga_dasar) : '')}" class="wn-input tabular-nums" />
                         </div>
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div>
-                                <label for="tar-min" class="wn-label">Batas Bawah <span class="text-rose-600">*</span></label>
+                                <label for="tar-min" class="wn-label">Batas Bawah <span class="text-danger">*</span></label>
                                 <input id="tar-min" type="number" min="0" required value="${escapeHtml(editing ? Number(editing.batas_bawah) : '')}" class="wn-input tabular-nums" />
                             </div>
                             <div>
-                                <label for="tar-max" class="wn-label">Batas Atas <span class="text-rose-600">*</span></label>
+                                <label for="tar-max" class="wn-label">Batas Atas <span class="text-danger">*</span></label>
                                 <input id="tar-max" type="number" min="0" required value="${escapeHtml(editing ? Number(editing.batas_atas) : '')}" class="wn-input tabular-nums" />
                             </div>
                         </div>
-                        <label class="flex items-center gap-2 text-xs text-slate-700">
-                            <input id="tar-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="rounded border-slate-300 text-teal-700" />
+                        <label class="flex items-center gap-2 text-xs text-ink">
+                            <input id="tar-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="wn-checkbox" />
                             <span>Status Aktif</span>
                         </label>
                         <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full">${editing ? 'Simpan Tarif' : 'Tambah Tarif'}</button>

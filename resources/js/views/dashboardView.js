@@ -14,6 +14,7 @@ import {
     renderErrorAlert,
     renderLoadingState,
     renderPageHeader,
+    renderPaginationBar,
     todayWibDateString,
 } from '../utils/formatters.js';
 
@@ -107,49 +108,49 @@ export function mountDashboardView(container) {
         const selisihPrefix = selisih > 0 ? '+ ' : selisih < 0 ? '- ' : '';
 
         return `
-            <div class="grid gap-4 lg:grid-cols-3">
-                <div class="wn-card p-5 lg:col-span-2">
+            <div class="grid gap-4 xl:grid-cols-3">
+                <div class="wn-card p-5 xl:col-span-2">
                     <div class="flex flex-wrap items-center justify-between gap-2">
-                        <h2 class="text-sm font-bold text-slate-900">Ringkasan Finansial Hari Ini (WIB)</h2>
-                        <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">Berdasarkan Transaksi Lunas</span>
+                        <h2 class="text-sm font-bold text-ink">Ringkasan Finansial Hari Ini (WIB)</h2>
+                        <span class="rounded-full bg-primary-soft px-2.5 py-0.5 text-[11px] font-semibold text-primary">Berdasarkan Transaksi Lunas</span>
                     </div>
 
                     <div class="mt-3 grid gap-3 sm:grid-cols-3">
-                        <div class="rounded-xl bg-slate-50 p-3.5">
-                            <p class="text-xs font-medium text-slate-500">Pendapatan</p>
-                            <p class="mt-1 text-lg font-bold text-emerald-700 tabular-nums">${escapeHtml(formatRupiah(ownerTodayFinance.total_pendapatan))}</p>
+                        <div class="rounded-xl border border-border-subtle bg-app-bg p-3.5">
+                            <p class="text-xs font-medium text-ink-muted">Pendapatan</p>
+                            <p class="mt-1 whitespace-nowrap text-lg font-bold text-success tabular-nums">${escapeHtml(formatRupiah(ownerTodayFinance.total_pendapatan))}</p>
                         </div>
-                        <div class="rounded-xl bg-slate-50 p-3.5">
-                            <p class="text-xs font-medium text-slate-500">Pengeluaran Aktif</p>
-                            <p class="mt-1 text-lg font-bold text-rose-700 tabular-nums">${escapeHtml(formatRupiah(ownerTodayFinance.total_pengeluaran))}</p>
+                        <div class="rounded-xl border border-border-subtle bg-app-bg p-3.5">
+                            <p class="text-xs font-medium text-ink-muted">Pengeluaran Aktif</p>
+                            <p class="mt-1 whitespace-nowrap text-lg font-bold text-danger tabular-nums">${escapeHtml(formatRupiah(ownerTodayFinance.total_pengeluaran))}</p>
                         </div>
-                        <div class="rounded-xl bg-slate-900 p-3.5 text-white">
-                            <p class="text-xs font-medium text-slate-300">Selisih Pendapatan & Pengeluaran</p>
-                            <p class="mt-1 text-lg font-bold tabular-nums">${escapeHtml(`${selisihPrefix}${formatRupiah(Math.abs(selisih))}`)}</p>
+                        <div class="wn-card-navy p-3.5">
+                            <p class="text-xs font-medium text-blue-100/90">Selisih Pendapatan & Pengeluaran</p>
+                            <p class="mt-1 whitespace-nowrap text-lg font-bold tabular-nums">${escapeHtml(`${selisihPrefix}${formatRupiah(Math.abs(selisih))}`)}</p>
                         </div>
                     </div>
                 </div>
 
                 <div class="wn-card flex flex-col justify-between p-5">
                     <div class="flex items-center justify-between">
-                        <h2 class="text-sm font-bold text-slate-900">Pintasan Manajemen</h2>
+                        <h2 class="text-sm font-bold text-ink">Pintasan Manajemen</h2>
                     </div>
-                    <div class="mt-3 grid grid-cols-2 gap-2">
-                        <button type="button" data-dash-nav="${APP_VIEWS.ORDERS}" class="wn-btn-secondary justify-start gap-2 px-3 text-xs">
-                            ${iconSvg('receipt', 'h-3.5 w-3.5 text-teal-700')}
-                            <span>Riwayat</span>
+                    <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
+                        <button type="button" data-dash-nav="${APP_VIEWS.ORDERS}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
+                            ${iconSvg('receipt', 'h-3.5 w-3.5 text-primary')}
+                            <span class="truncate">Riwayat</span>
                         </button>
-                        <button type="button" data-dash-nav="${APP_VIEWS.OWNER_FINANCE}" class="wn-btn-secondary justify-start gap-2 px-3 text-xs">
-                            ${iconSvg('chart', 'h-3.5 w-3.5 text-teal-700')}
-                            <span>Laporan</span>
+                        <button type="button" data-dash-nav="${APP_VIEWS.OWNER_FINANCE}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
+                            ${iconSvg('chart', 'h-3.5 w-3.5 text-primary')}
+                            <span class="truncate">Laporan</span>
                         </button>
-                        <button type="button" data-dash-nav="${APP_VIEWS.OWNER_CATALOG}" class="wn-btn-secondary justify-start gap-2 px-3 text-xs">
-                            ${iconSvg('tag', 'h-3.5 w-3.5 text-teal-700')}
-                            <span>Katalog</span>
+                        <button type="button" data-dash-nav="${APP_VIEWS.OWNER_CATALOG}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
+                            ${iconSvg('tag', 'h-3.5 w-3.5 text-primary')}
+                            <span class="truncate">Katalog</span>
                         </button>
-                        <button type="button" data-dash-nav="${APP_VIEWS.OWNER_STAFF}" class="wn-btn-secondary justify-start gap-2 px-3 text-xs">
-                            ${iconSvg('users', 'h-3.5 w-3.5 text-teal-700')}
-                            <span>Akun Kasir</span>
+                        <button type="button" data-dash-nav="${APP_VIEWS.OWNER_STAFF}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
+                            ${iconSvg('users', 'h-3.5 w-3.5 text-primary')}
+                            <span class="truncate">Akun Kasir</span>
                         </button>
                     </div>
                 </div>
@@ -179,19 +180,19 @@ export function mountDashboardView(container) {
                     <div class="wn-card px-4 py-3">
                         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div class="flex flex-wrap items-center gap-2.5">
-                                <span class="text-xs font-semibold text-slate-600">${escapeHtml(formatDateFullIndo(scheduleStatus.tanggal))}</span>
+                                <span class="text-xs font-semibold text-ink-muted">${escapeHtml(formatDateFullIndo(scheduleStatus.tanggal))}</span>
                                 ${badgeOperasional(scheduleStatus.status_jam_operasional)}
                             </div>
                             <button
                                 id="dash-hours-link"
                                 type="button"
-                                class="text-left text-xs font-semibold text-teal-700 hover:text-teal-900 sm:text-right"
+                                class="wn-link inline-flex min-h-[32px] items-center text-left text-xs sm:text-right"
                             >
                                 ${ownerMode ? 'Kelola Jam Operasional →' : 'Lihat Jadwal →'}
                             </button>
                         </div>
                         ${warnings.length > 0 ? `
-                            <p class="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800">
+                            <p class="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900">
                                 ${warnings.map((w) => escapeHtml(w)).join(' ')}
                             </p>
                         ` : ''}
@@ -202,47 +203,47 @@ export function mountDashboardView(container) {
 
                 ${summary ? `
                     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                        <div class="wn-card p-4">
-                            <div class="flex items-center justify-between text-xs font-medium text-slate-500">
+                        <div class="wn-card min-w-0 p-3.5 sm:p-4">
+                            <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
                                 <span>Antrean Aktif</span>
-                                <span class="rounded-lg bg-slate-100 p-1.5 text-slate-700">${iconSvg('clock', 'h-4 w-4')}</span>
+                                <span class="rounded-lg bg-app-bg p-1.5 text-brand-navy">${iconSvg('clock', 'h-4 w-4')}</span>
                             </div>
-                            <p class="mt-2 text-2xl font-bold text-slate-900 tabular-nums">${summary.antrean_aktif_total ?? 0}</p>
-                            <p class="mt-1 text-xs text-slate-500">Berjalan ${summary.berjalan_count ?? 0} • Selesai belum bayar ${summary.selesai_belum_dibayar_count ?? 0}</p>
+                            <p class="mt-2 text-2xl font-bold text-ink tabular-nums">${summary.antrean_aktif_total ?? 0}</p>
+                            <p class="mt-1 text-xs text-ink-muted">Berjalan ${summary.berjalan_count ?? 0} • Selesai belum bayar ${summary.selesai_belum_dibayar_count ?? 0}</p>
                         </div>
-                        <div class="wn-card p-4">
-                            <div class="flex items-center justify-between text-xs font-medium text-slate-500">
+                        <div class="wn-card min-w-0 p-3.5 sm:p-4">
+                            <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
                                 <span>Belum Dibayar</span>
-                                <span class="rounded-lg bg-amber-50 p-1.5 text-amber-700">${iconSvg('wallet', 'h-4 w-4')}</span>
+                                <span class="rounded-lg bg-amber-50 p-1.5 text-warning">${iconSvg('wallet', 'h-4 w-4')}</span>
                             </div>
-                            <p class="mt-2 text-2xl font-bold text-amber-700 tabular-nums">${summary.belum_dibayar_count ?? 0}</p>
-                            <p class="mt-1 text-xs text-slate-500">Menunggu pelunasan</p>
+                            <p class="mt-2 text-2xl font-bold text-warning tabular-nums">${summary.belum_dibayar_count ?? 0}</p>
+                            <p class="mt-1 text-xs text-ink-muted">Menunggu pelunasan</p>
                         </div>
-                        <div class="wn-card p-4">
-                            <div class="flex items-center justify-between text-xs font-medium text-slate-500">
+                        <div class="wn-card min-w-0 p-3.5 sm:p-4">
+                            <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
                                 <span>Kendaraan Aktif</span>
-                                <span class="rounded-lg bg-teal-50 p-1.5 text-teal-700">${iconSvg('car', 'h-4 w-4')}</span>
+                                <span class="rounded-lg bg-primary-soft p-1.5 text-primary">${iconSvg('car', 'h-4 w-4')}</span>
                             </div>
-                            <p class="mt-2 text-lg font-bold text-slate-900 tabular-nums">
+                            <p class="mt-2 text-lg font-bold text-ink tabular-nums">
                                 ${summary.kendaraan_menunggu_count ?? 0} M • ${summary.kendaraan_proses_count ?? 0} P • ${summary.kendaraan_selesai_count ?? 0} S
                             </p>
-                            <p class="mt-1 text-xs text-slate-500">Menunggu / Proses / Selesai</p>
+                            <p class="mt-1 text-xs text-ink-muted">Menunggu / Proses / Selesai</p>
                         </div>
-                        <div class="wn-card p-4">
-                            <div class="flex items-center justify-between text-xs font-medium text-slate-500">
+                        <div class="wn-card min-w-0 p-3.5 sm:p-4">
+                            <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
                                 <span>Pesanan Hari Ini (WIB)</span>
-                                <span class="rounded-lg bg-emerald-50 p-1.5 text-emerald-700">${iconSvg('receipt', 'h-4 w-4')}</span>
+                                <span class="rounded-lg bg-green-50 p-1.5 text-success">${iconSvg('receipt', 'h-4 w-4')}</span>
                             </div>
-                            <p class="mt-2 text-2xl font-bold text-emerald-700 tabular-nums">${summary.hari_ini_total_pesanan ?? 0}</p>
-                            <p class="mt-1 text-xs text-slate-500">Selesai & lunas: ${summary.hari_ini_selesai_dibayar_count ?? 0}</p>
+                            <p class="mt-2 text-2xl font-bold text-success tabular-nums">${summary.hari_ini_total_pesanan ?? 0}</p>
+                            <p class="mt-1 text-xs text-ink-muted">Selesai & lunas: ${summary.hari_ini_selesai_dibayar_count ?? 0}</p>
                         </div>
                     </div>
                 ` : ''}
 
                 <div class="wn-card overflow-hidden">
-                    <div class="border-b border-slate-200 p-4">
+                    <div class="border-b border-border-subtle p-4">
                         <div class="mb-3 flex items-center justify-between">
-                            <h2 class="text-sm font-bold text-slate-900">Antrean Aktif</h2>
+                            <h2 class="text-sm font-bold text-ink">Antrean Aktif</h2>
                         </div>
                         <form id="dash-filter-form" class="flex flex-col gap-2.5 sm:flex-row sm:items-center">
                             <div class="flex-1">
@@ -254,7 +255,7 @@ export function mountDashboardView(container) {
                                     class="wn-input"
                                 />
                             </div>
-                            <div class="sm:w-56">
+                            <div class="sm:w-64">
                                 <select id="dash-payment-select" class="wn-select">
                                     <option value="" ${paymentFilter === '' ? 'selected' : ''}>Semua Status Pembayaran</option>
                                     <option value="belum_dibayar" ${paymentFilter === 'belum_dibayar' ? 'selected' : ''}>Belum Dibayar</option>
@@ -296,10 +297,10 @@ export function mountDashboardView(container) {
                             })}
                         </div>
                     ` : `
-                        <div class="divide-y divide-slate-200">
+                        <div class="divide-y divide-border-subtle">
                             ${items.map((order) => renderQueueCard(order, busyVehicleId)).join('')}
                         </div>
-                        ${renderPaginationBar(ordersPage)}
+                        ${renderPaginationBar(ordersPage, 'data-dash-page', 'pesanan aktif')}
                     `}
                 </div>
             </div>
@@ -313,28 +314,28 @@ export function mountDashboardView(container) {
         const vehicles = order.kendaraan || [];
 
         return `
-            <div class="p-4 transition hover:bg-slate-50/70">
+            <div class="p-4 transition hover:bg-app-bg/60">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div class="space-y-1">
+                    <div class="min-w-0 space-y-1">
                         <div class="flex flex-wrap items-center gap-2">
-                            <span class="font-mono text-sm font-bold text-slate-900">${escapeHtml(order.nomor_nota || `#${order.id_pesanan}`)}</span>
+                            <span class="font-mono text-sm font-bold text-ink">${escapeHtml(order.nomor_nota || `#${order.id_pesanan}`)}</span>
                             ${badgePesanan(order.status_pesanan)}
                             ${badgePembayaran(payStatus)}
-                            ${order.pada_hari_libur ? '<span class="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">Hari Libur</span>' : ''}
-                            ${order.di_luar_jam_operasional && !order.pada_hari_libur ? '<span class="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">Luar Jam</span>' : ''}
+                            ${order.pada_hari_libur ? '<span class="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-danger">Hari Libur</span>' : ''}
+                            ${order.di_luar_jam_operasional && !order.pada_hari_libur ? '<span class="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-warning">Luar Jam</span>' : ''}
                         </div>
-                        <p class="text-xs text-slate-500">
+                        <p class="text-xs text-ink-muted">
                             Dibuat: ${escapeHtml(formatDateTimeWib(order.waktu_pesanan))} • Kasir: ${escapeHtml(order.pengguna?.nama_lengkap || '-')}
                         </p>
-                        ${order.catatan ? `<p class="text-xs text-slate-700"><span class="font-semibold">Catatan:</span> ${escapeHtml(order.catatan)}</p>` : ''}
+                        ${order.catatan ? `<p class="text-xs text-ink"><span class="font-semibold">Catatan:</span> ${escapeHtml(order.catatan)}</p>` : ''}
                     </div>
                     <div class="flex flex-wrap items-center gap-2 lg:justify-end">
-                        <span class="mr-2 text-base font-bold text-slate-900 tabular-nums">${escapeHtml(formatRupiah(order.total_harga))}</span>
+                        <span class="mr-2 text-base font-bold text-ink tabular-nums">${escapeHtml(formatRupiah(order.total_harga))}</span>
                         <button
                             type="button"
                             data-open-order="${order.id_pesanan}"
                             data-open-tab="detail"
-                            class="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                            class="inline-flex min-h-[36px] items-center rounded-xl border border-border-subtle bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-app-bg"
                         >
                             Detail / Edit
                         </button>
@@ -343,7 +344,7 @@ export function mountDashboardView(container) {
                                 type="button"
                                 data-open-order="${order.id_pesanan}"
                                 data-open-tab="payment"
-                                class="rounded-xl bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-800"
+                                class="inline-flex min-h-[36px] items-center rounded-xl bg-primary px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-hover"
                             >
                                 Bayar
                             </button>
@@ -359,14 +360,14 @@ export function mountDashboardView(container) {
                             .join(', ');
 
                         return `
-                            <div class="flex flex-col justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                            <div class="flex flex-col justify-between gap-2.5 rounded-xl border border-border-subtle bg-app-bg/70 p-3">
                                 <div class="flex items-start justify-between gap-2">
-                                    <div>
-                                        <p class="text-xs font-semibold text-slate-900">
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-semibold text-ink">
                                             ${escapeHtml(veh.nama_kategori_snapshot || 'Kendaraan')}
-                                            ${veh.plat_nomor ? `<span class="ml-1.5 rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[11px] text-slate-800">${escapeHtml(veh.plat_nomor)}</span>` : '<span class="ml-1 text-[11px] font-normal text-slate-400">(tanpa plat)</span>'}
+                                            ${veh.plat_nomor ? `<span class="ml-1.5 rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[11px] text-ink">${escapeHtml(veh.plat_nomor)}</span>` : '<span class="ml-1 text-[11px] font-normal text-ink-muted">(tanpa plat)</span>'}
                                         </p>
-                                        <p class="mt-0.5 text-[11px] text-slate-600">${escapeHtml(servicesSummary)}</p>
+                                        <p class="mt-0.5 text-[11px] text-ink-muted">${escapeHtml(servicesSummary)}</p>
                                     </div>
                                     ${badgeKendaraan(veh.status_proses)}
                                 </div>
@@ -381,10 +382,10 @@ export function mountDashboardView(container) {
                                                 data-veh-status="${targetStatus}"
                                                 data-order-id="${order.id_pesanan}"
                                                 ${isCurrent || isBusy ? 'disabled' : ''}
-                                                class="rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                                                class="min-h-[34px] rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
                                                     isCurrent
-                                                        ? 'bg-slate-800 text-white'
-                                                        : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-50'
+                                                        ? 'bg-brand-navy text-white'
+                                                        : 'border border-border-subtle bg-surface text-ink hover:bg-primary-soft disabled:opacity-50'
                                                 }"
                                             >
                                                 ${labelMap[targetStatus]}
@@ -395,36 +396,6 @@ export function mountDashboardView(container) {
                             </div>
                         `;
                     }).join('')}
-                </div>
-            </div>
-        `;
-    }
-
-    function renderPaginationBar(paginator) {
-        if (!paginator || (paginator.last_page ?? 1) <= 1) {
-            return '';
-        }
-
-        return `
-            <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
-                <span>Halaman ${paginator.current_page} dari ${paginator.last_page} (${paginator.total} pesanan aktif)</span>
-                <div class="flex gap-2">
-                    <button
-                        type="button"
-                        data-dash-page="${paginator.current_page - 1}"
-                        ${paginator.current_page <= 1 ? 'disabled' : ''}
-                        class="rounded-lg border border-slate-300 bg-white px-3 py-1 font-medium hover:bg-slate-50 disabled:opacity-50"
-                    >
-                        Sebelumnya
-                    </button>
-                    <button
-                        type="button"
-                        data-dash-page="${paginator.current_page + 1}"
-                        ${paginator.current_page >= paginator.last_page ? 'disabled' : ''}
-                        class="rounded-lg border border-slate-300 bg-white px-3 py-1 font-medium hover:bg-slate-50 disabled:opacity-50"
-                    >
-                        Berikutnya
-                    </button>
                 </div>
             </div>
         `;
