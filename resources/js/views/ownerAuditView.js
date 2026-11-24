@@ -1,6 +1,6 @@
 import { washnoteApi } from '../api/client.js';
 import { createViewMotion } from '../motion/motionSystem.js';
-import { APP_VIEWS, navigateTo } from '../state/store.js';
+import { APP_VIEWS, navigateBack } from '../state/store.js';
 import {
     escapeHtml,
     formatDateIndo,
@@ -245,7 +245,6 @@ export function mountOwnerAuditView(container) {
             <div class="space-y-5">
                 ${renderPageHeader({
                     backBtnId: 'audit-back-btn',
-                    backLabel: '← Kembali ke Akun',
                     title: 'Audit Perubahan',
                 })}
 
@@ -367,7 +366,7 @@ export function mountOwnerAuditView(container) {
             </div>
         `;
 
-        container.querySelector('#audit-back-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.PROFILE));
+        container.querySelector('#audit-back-btn')?.addEventListener('click', () => navigateBack(APP_VIEWS.PROFILE));
         container.querySelector('#audit-retry-btn')?.addEventListener('click', loadLogs);
         if (!isLoading) {
             motion.refresh();

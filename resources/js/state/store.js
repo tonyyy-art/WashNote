@@ -8,7 +8,9 @@ export const APP_VIEWS = {
     OPERATING_HOURS: 'operating-hours',
     OWNER_CATALOG: 'owner-catalog',
     OWNER_STAFF: 'owner-staff',
-    OWNER_FINANCE: 'owner-finance',
+    OWNER_EXPENSES: 'owner-expenses',
+    OWNER_EXPENSE_CATEGORIES: 'owner-expense-categories',
+    OWNER_REPORTS: 'owner-reports',
     OWNER_AUDIT: 'owner-audit',
     PROFILE: 'profile',
 };
@@ -20,10 +22,23 @@ const VIEW_PATHS = {
     [APP_VIEWS.OPERATING_HOURS]: '/jam-operasional',
     [APP_VIEWS.OWNER_CATALOG]: '/katalog-layanan',
     [APP_VIEWS.OWNER_STAFF]: '/kelola-kasir',
-    [APP_VIEWS.OWNER_FINANCE]: '/laporan',
+    [APP_VIEWS.OWNER_EXPENSES]: '/pengeluaran',
+    [APP_VIEWS.OWNER_EXPENSE_CATEGORIES]: '/kategori-pengeluaran',
+    [APP_VIEWS.OWNER_REPORTS]: '/laporan',
     [APP_VIEWS.OWNER_AUDIT]: '/riwayat-audit',
     [APP_VIEWS.PROFILE]: '/profil',
 };
+
+const OWNER_ONLY_VIEWS = new Set([
+    APP_VIEWS.OWNER_CATALOG,
+    APP_VIEWS.OWNER_STAFF,
+    APP_VIEWS.OWNER_EXPENSES,
+    APP_VIEWS.OWNER_EXPENSE_CATEGORIES,
+    APP_VIEWS.OWNER_REPORTS,
+    APP_VIEWS.OWNER_AUDIT,
+]);
+
+const APP_BOOT_ID = `wn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export function resolveViewFromPath(pathname, search = typeof window !== 'undefined' ? window.location.search : '') {
     const clean = (pathname || '/').replace(/\/+$/, '') || '/';
@@ -38,18 +53,27 @@ export function resolveViewFromPath(pathname, search = typeof window !== 'undefi
     }
 
     if (clean === '/pengeluaran') {
-        return { view: APP_VIEWS.OWNER_FINANCE, options: { financeTab: 'expenses' } };
+        return { view: APP_VIEWS.OWNER_EXPENSES, options: {} };
+    }
+
+    if (clean === '/kategori-pengeluaran') {
+        return { view: APP_VIEWS.OWNER_EXPENSE_CATEGORIES, options: {} };
     }
 
     if (clean === '/laporan') {
-        return { view: APP_VIEWS.OWNER_FINANCE, options: { financeTab: 'reports' } };
+        return { view: APP_VIEWS.OWNER_REPORTS, options: {} };
     }
 
     if (clean === '/keuangan') {
         const params = new URLSearchParams(search || '');
         const tabParam = params.get('tab');
-        const financeTab = ['reports', 'expenses', 'categories'].includes(tabParam) ? tabParam : 'reports';
-        return { view: APP_VIEWS.OWNER_FINANCE, options: { financeTab } };
+        if (tabParam === 'expenses') {
+            return { view: APP_VIEWS.OWNER_EXPENSES, options: {} };
+        }
+        if (tabParam === 'categories') {
+            return { view: APP_VIEWS.OWNER_EXPENSE_CATEGORIES, options: {} };
+        }
+        return { view: APP_VIEWS.OWNER_REPORTS, options: {} };
     }
 
     for (const [view, path] of Object.entries(VIEW_PATHS)) {
@@ -61,34 +85,33 @@ export function resolveViewFromPath(pathname, search = typeof window !== 'undefi
     return { view: APP_VIEWS.DASHBOARD, options: {} };
 }
 
-function buildPathForView(view, orderId = null, financeTab = 'reports') {
+function buildPathForView(view, orderId = null) {
     if (view === APP_VIEWS.ORDER_DETAIL && orderId) {
         return `/pesanan/${orderId}`;
-    }
-
-    if (view === APP_VIEWS.OWNER_FINANCE) {
-        if (financeTab === 'expenses') {
-            return '/pengeluaran';
-        }
-        if (financeTab === 'categories') {
-            return '/keuangan?tab=categories';
-        }
-        return '/laporan';
     }
 
     return VIEW_PATHS[view] || '/';
 }
 
-function syncBrowserUrl(view, orderId = null, replace = false, financeTab = 'reports') {
+function syncBrowserUrl(view, orderId = null, replace = false, nextHistoryIndex = 0) {
     if (typeof window === 'undefined' || !window.history) {
         return;
     }
 
-    const targetUrl = buildPathForView(view, orderId, financeTab);
+    const targetUrl = buildPathForView(view, orderId);
     const currentUrl = `${window.location.pathname}${window.location.search}`;
+    const payload = {
+        view,
+        orderId,
+        appBootId: APP_BOOT_ID,
+        historyIndex: nextHistoryIndex,
+    };
+
     if (currentUrl !== targetUrl) {
         const fn = replace ? 'replaceState' : 'pushState';
-        window.history[fn]({ view, orderId, financeTab }, '', targetUrl);
+        window.history[fn](payload, '', targetUrl);
+    } else if (replace || window.history.state?.appBootId !== APP_BOOT_ID) {
+        window.history.replaceState(payload, '', targetUrl);
     }
 }
 
@@ -98,14 +121,13 @@ export const state = {
     activeView: APP_VIEWS.DASHBOARD,
     selectedOrderId: null,
     selectedOrderInitialTab: 'detail',
-    selectedFinanceTab: 'reports',
+    historyIndex: 0,
     authNotice: null,
     toast: null,
 };
 
 let onStateChange = () => {};
 let onToastChange = () => {};
-let onNavSync = () => {};
 
 export function subscribeStateChange(callback) {
     onStateChange = callback;
@@ -115,22 +137,12 @@ export function subscribeToastChange(callback) {
     onToastChange = callback;
 }
 
-export function subscribeNavSync(callback) {
-    onNavSync = callback;
-}
-
 export function notifyRender() {
     onStateChange();
 }
 
 export function notifyToastRender() {
     onToastChange();
-}
-
-export function syncFinanceTabUrl(financeTab, replace = false) {
-    state.selectedFinanceTab = financeTab;
-    syncBrowserUrl(APP_VIEWS.OWNER_FINANCE, null, replace, financeTab);
-    onNavSync();
 }
 
 export function isOwner() {
@@ -149,10 +161,10 @@ export function resetSession(notice = null) {
     state.token = null;
     state.user = null;
     state.selectedOrderId = null;
-    state.selectedFinanceTab = 'reports';
     state.activeView = APP_VIEWS.DASHBOARD;
+    state.historyIndex = 0;
     state.authNotice = notice;
-    syncBrowserUrl(APP_VIEWS.DASHBOARD, null, true);
+    syncBrowserUrl(APP_VIEWS.DASHBOARD, null, true, 0);
 }
 
 export function showToast(message, type = 'success') {
@@ -173,35 +185,68 @@ export function showToast(message, type = 'success') {
 }
 
 export function navigateTo(view, options = {}) {
-    const ownerOnlyViews = new Set([
-        APP_VIEWS.OWNER_CATALOG,
-        APP_VIEWS.OWNER_STAFF,
-        APP_VIEWS.OWNER_FINANCE,
-        APP_VIEWS.OWNER_AUDIT,
-    ]);
-
-    if (ownerOnlyViews.has(view) && !isOwner()) {
+    if (OWNER_ONLY_VIEWS.has(view) && !isOwner()) {
         showToast('Anda tidak memiliki hak akses ke halaman khusus Owner.', 'error');
         state.activeView = APP_VIEWS.DASHBOARD;
-        syncBrowserUrl(APP_VIEWS.DASHBOARD, null, true);
+        state.historyIndex = 0;
+        syncBrowserUrl(APP_VIEWS.DASHBOARD, null, true, 0);
         notifyRender();
         return;
     }
+
+    const prevView = state.activeView;
+    const prevOrderId = state.selectedOrderId;
 
     state.activeView = view;
 
     if (options.orderId !== undefined) {
         state.selectedOrderId = options.orderId;
+    } else if (view !== APP_VIEWS.ORDER_DETAIL) {
+        state.selectedOrderId = null;
     }
 
     if (options.tab !== undefined) {
         state.selectedOrderInitialTab = options.tab;
+    } else if (view === APP_VIEWS.ORDER_DETAIL && options.tab === undefined) {
+        state.selectedOrderInitialTab = 'detail';
     }
 
-    if (view === APP_VIEWS.OWNER_FINANCE) {
-        state.selectedFinanceTab = options.financeTab || state.selectedFinanceTab || 'reports';
+    const replace = Boolean(options.replaceUrl);
+    const sameDestination = prevView === state.activeView && prevOrderId === state.selectedOrderId;
+
+    if (options.popHistoryIndex !== undefined && options.popHistoryIndex !== null) {
+        state.historyIndex = Math.max(0, Number(options.popHistoryIndex));
+    } else if (!replace && !sameDestination) {
+        state.historyIndex += 1;
     }
 
-    syncBrowserUrl(view, state.selectedOrderId, Boolean(options.replaceUrl), state.selectedFinanceTab);
+    syncBrowserUrl(view, state.selectedOrderId, replace || sameDestination, state.historyIndex);
     notifyRender();
+}
+
+export function handlePopStateNavigation(popState = null) {
+    if (!state.token || !state.user) {
+        return;
+    }
+
+    const target = resolveViewFromPath(window.location.pathname, window.location.search);
+    const restoredIndex =
+        popState && popState.appBootId === APP_BOOT_ID && typeof popState.historyIndex === 'number'
+            ? popState.historyIndex
+            : 0;
+
+    navigateTo(target.view, {
+        ...target.options,
+        replaceUrl: true,
+        popHistoryIndex: restoredIndex,
+    });
+}
+
+export function navigateBack(fallbackView = APP_VIEWS.DASHBOARD, fallbackOptions = {}) {
+    if (typeof window !== 'undefined' && window.history && state.historyIndex > 0) {
+        window.history.back();
+        return;
+    }
+
+    navigateTo(fallbackView, { ...fallbackOptions, replaceUrl: false });
 }

@@ -9,13 +9,13 @@ import {
 } from './motion/motionSystem.js';
 import {
     APP_VIEWS,
+    handlePopStateNavigation,
     isOwner,
     navigateTo,
     resetSession,
     resolveViewFromPath,
     setAuthenticatedSession,
     state,
-    subscribeNavSync,
     subscribeStateChange,
     subscribeToastChange,
 } from './state/store.js';
@@ -27,7 +27,9 @@ import { mountOrderDetailView } from './views/orderDetailView.js';
 import { mountOrderCreateView, mountOrdersListView } from './views/ordersView.js';
 import { mountOwnerAuditView } from './views/ownerAuditView.js';
 import { mountOwnerCatalogView } from './views/ownerCatalogView.js';
-import { mountOwnerFinanceView } from './views/ownerFinanceView.js';
+import { mountOwnerExpenseCategoriesView } from './views/ownerExpenseCategoriesView.js';
+import { mountOwnerExpensesView } from './views/ownerExpensesView.js';
+import { mountOwnerReportsView } from './views/ownerReportsView.js';
 import { mountOwnerStaffView } from './views/ownerStaffView.js';
 import { mountProfileView } from './views/profileView.js';
 
@@ -48,7 +50,8 @@ function getSidebarNavItems() {
         items.push(
             { view: APP_VIEWS.OWNER_CATALOG, label: 'Katalog & Tarif', icon: 'tag', group: 'Manajemen Owner' },
             { view: APP_VIEWS.OWNER_STAFF, label: 'Akun Kasir', icon: 'users', group: 'Manajemen Owner' },
-            { view: APP_VIEWS.OWNER_FINANCE, label: 'Pengeluaran & Laporan', icon: 'wallet', group: 'Manajemen Owner' },
+            { view: APP_VIEWS.OWNER_EXPENSES, label: 'Pengeluaran', icon: 'receipt', group: 'Manajemen Owner' },
+            { view: APP_VIEWS.OWNER_REPORTS, label: 'Laporan Keuangan', icon: 'chart', group: 'Manajemen Owner' },
             { view: APP_VIEWS.OWNER_AUDIT, label: 'Audit Perubahan', icon: 'shield', group: 'Manajemen Owner' },
         );
     }
@@ -73,21 +76,18 @@ function getMobileBottomNavItems() {
             },
             {
                 id: 'owner-expenses',
-                view: APP_VIEWS.OWNER_FINANCE,
-                financeTab: 'expenses',
+                view: APP_VIEWS.OWNER_EXPENSES,
                 label: 'Pengeluaran',
                 icon: 'receipt',
                 isActive: () =>
-                    state.activeView === APP_VIEWS.OWNER_FINANCE && state.selectedFinanceTab !== 'reports',
+                    [APP_VIEWS.OWNER_EXPENSES, APP_VIEWS.OWNER_EXPENSE_CATEGORIES].includes(state.activeView),
             },
             {
                 id: 'owner-reports',
-                view: APP_VIEWS.OWNER_FINANCE,
-                financeTab: 'reports',
+                view: APP_VIEWS.OWNER_REPORTS,
                 label: 'Laporan',
                 icon: 'barChart',
-                isActive: () =>
-                    state.activeView === APP_VIEWS.OWNER_FINANCE && state.selectedFinanceTab === 'reports',
+                isActive: () => state.activeView === APP_VIEWS.OWNER_REPORTS,
             },
             {
                 id: 'owner-account',
@@ -154,13 +154,11 @@ function getMobileHeaderLabel() {
             return 'Katalog & Tarif';
         case APP_VIEWS.OWNER_STAFF:
             return 'Kelola Akun Kasir';
-        case APP_VIEWS.OWNER_FINANCE:
-            if (state.selectedFinanceTab === 'expenses') {
-                return 'Daftar Pengeluaran';
-            }
-            if (state.selectedFinanceTab === 'categories') {
-                return 'Kategori Pengeluaran';
-            }
+        case APP_VIEWS.OWNER_EXPENSES:
+            return 'Pengeluaran';
+        case APP_VIEWS.OWNER_EXPENSE_CATEGORIES:
+            return 'Kategori Pengeluaran';
+        case APP_VIEWS.OWNER_REPORTS:
             return 'Laporan Keuangan';
         case APP_VIEWS.OWNER_AUDIT:
             return 'Audit Perubahan';
@@ -218,7 +216,8 @@ function syncNavigationHighlights(immediateIndicator = false) {
         const itemView = btn.getAttribute('data-nav-view');
         const active =
             state.activeView === itemView ||
-            (state.activeView === APP_VIEWS.ORDER_DETAIL && itemView === APP_VIEWS.ORDERS);
+            (state.activeView === APP_VIEWS.ORDER_DETAIL && itemView === APP_VIEWS.ORDERS) ||
+            (state.activeView === APP_VIEWS.OWNER_EXPENSE_CATEGORIES && itemView === APP_VIEWS.OWNER_EXPENSES);
 
         btn.className = `flex min-h-[40px] w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
             active ? 'bg-brand-navy text-white shadow-xs' : 'text-ink hover:bg-app-bg'
@@ -360,7 +359,6 @@ function mountShell() {
                                     type="button"
                                     data-bottom-nav-id="${item.id}"
                                     data-bottom-view="${item.view}"
-                                    ${item.financeTab ? `data-bottom-finance-tab="${item.financeTab}"` : ''}
                                     class="relative flex min-h-[56px] flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-semibold whitespace-nowrap text-ink-muted transition"
                                 >
                                     ${iconSvg(item.icon, 'h-5 w-5')}
@@ -384,24 +382,13 @@ function mountShell() {
 
     rootEl.querySelectorAll('[data-nav-view]').forEach((btn) => {
         btn.addEventListener('click', () => {
-            const targetView = btn.getAttribute('data-nav-view');
-            if (targetView === APP_VIEWS.OWNER_FINANCE) {
-                navigateTo(targetView, { financeTab: 'reports' });
-            } else {
-                navigateTo(targetView);
-            }
+            navigateTo(btn.getAttribute('data-nav-view'));
         });
     });
 
     rootEl.querySelectorAll('[data-bottom-nav-id]').forEach((btn) => {
         btn.addEventListener('click', () => {
-            const targetView = btn.getAttribute('data-bottom-view');
-            const financeTab = btn.getAttribute('data-bottom-finance-tab');
-            if (financeTab) {
-                navigateTo(targetView, { financeTab });
-            } else {
-                navigateTo(targetView);
-            }
+            navigateTo(btn.getAttribute('data-bottom-view'));
         });
     });
 
@@ -447,8 +434,14 @@ function mountActiveView() {
         case APP_VIEWS.OWNER_STAFF:
             mountOwnerStaffView(outlet);
             break;
-        case APP_VIEWS.OWNER_FINANCE:
-            mountOwnerFinanceView(outlet);
+        case APP_VIEWS.OWNER_EXPENSES:
+            mountOwnerExpensesView(outlet);
+            break;
+        case APP_VIEWS.OWNER_EXPENSE_CATEGORIES:
+            mountOwnerExpenseCategoriesView(outlet);
+            break;
+        case APP_VIEWS.OWNER_REPORTS:
+            mountOwnerReportsView(outlet);
             break;
         case APP_VIEWS.OWNER_AUDIT:
             mountOwnerAuditView(outlet);
@@ -531,13 +524,9 @@ async function bootstrap() {
 
     subscribeStateChange(renderApp);
     subscribeToastChange(renderToast);
-    subscribeNavSync(() => syncNavigationHighlights(false));
 
-    window.addEventListener('popstate', () => {
-        if (state.token && state.user) {
-            const target = resolveViewFromPath(window.location.pathname, window.location.search);
-            navigateTo(target.view, { ...target.options, replaceUrl: true });
-        }
+    window.addEventListener('popstate', (event) => {
+        handlePopStateNavigation(event.state);
     });
 
     if (state.token) {

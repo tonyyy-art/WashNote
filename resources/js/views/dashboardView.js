@@ -102,6 +102,35 @@ export function mountDashboardView(container) {
         }
     }
 
+    function extractConciseScheduleNote(statusObj) {
+        if (!statusObj || statusObj.status_jam_operasional === 'dalam_jam') {
+            return '';
+        }
+
+        const warnings = statusObj.warnings || [];
+        const first = String(warnings[0] || '').trim();
+
+        if (statusObj.status_jam_operasional === 'hari_libur') {
+            const reasonMatch = first.match(/\(([^)]+)\)/);
+            return reasonMatch ? `Libur: ${reasonMatch[1]}` : 'Hari libur operasional';
+        }
+
+        if (statusObj.status_jam_operasional === 'belum_dikonfigurasi') {
+            return 'Jadwal hari ini belum diatur';
+        }
+
+        if (statusObj.sumber_aturan === 'jadwal_mingguan' && /sedang tutup/i.test(first)) {
+            return 'Jadwal mingguan tutup hari ini';
+        }
+
+        if (statusObj.sumber_aturan === 'pengecualian') {
+            const excMatch = first.match(/\(([^)]+)\)/);
+            return excMatch ? `Jam khusus: ${excMatch[1]}` : 'Di luar jam operasional khusus';
+        }
+
+        return '';
+    }
+
     function renderOwnerFinancialOverview() {
         if (!isOwner() || !ownerTodayFinance) {
             return '';
@@ -114,8 +143,8 @@ export function mountDashboardView(container) {
             <div class="grid gap-4 xl:grid-cols-3">
                 <div data-motion-card class="wn-card wn-interactive-card p-4 sm:p-5 xl:col-span-2">
                     <div class="flex flex-wrap items-center justify-between gap-2">
-                        <h2 class="text-sm font-bold text-ink">Ringkasan Finansial Hari Ini (WIB)</h2>
-                        <span class="rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent ring-1 ring-inset ring-accent-border">Berdasarkan Transaksi Lunas</span>
+                        <h2 class="text-sm font-bold text-ink">Ringkasan Finansial Hari Ini</h2>
+                        <span class="rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent ring-1 ring-inset ring-accent-border">Transaksi Lunas</span>
                     </div>
 
                     <div class="mt-3 grid gap-3 sm:grid-cols-3">
@@ -128,7 +157,7 @@ export function mountDashboardView(container) {
                             <p class="mt-1 whitespace-nowrap text-lg font-bold text-danger tabular-nums">${escapeHtml(formatRupiah(ownerTodayFinance.total_pengeluaran))}</p>
                         </div>
                         <div class="wn-card-navy p-3.5">
-                            <p class="text-xs font-medium text-blue-100/90">Selisih Pendapatan & Pengeluaran</p>
+                            <p class="text-xs font-medium text-blue-100/90">Selisih</p>
                             <p class="mt-1 whitespace-nowrap text-lg font-bold tabular-nums">${escapeHtml(`${selisihPrefix}${formatRupiah(Math.abs(selisih))}`)}</p>
                         </div>
                     </div>
@@ -143,7 +172,11 @@ export function mountDashboardView(container) {
                             ${iconSvg('receipt', 'h-3.5 w-3.5 text-accent')}
                             <span class="truncate">Riwayat</span>
                         </button>
-                        <button type="button" data-dash-nav="${APP_VIEWS.OWNER_FINANCE}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
+                        <button type="button" data-dash-nav="${APP_VIEWS.OWNER_EXPENSES}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
+                            ${iconSvg('wallet', 'h-3.5 w-3.5 text-accent')}
+                            <span class="truncate">Pengeluaran</span>
+                        </button>
+                        <button type="button" data-dash-nav="${APP_VIEWS.OWNER_REPORTS}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
                             ${iconSvg('chart', 'h-3.5 w-3.5 text-accent')}
                             <span class="truncate">Laporan</span>
                         </button>
@@ -154,10 +187,6 @@ export function mountDashboardView(container) {
                         <button type="button" data-dash-nav="${APP_VIEWS.OWNER_STAFF}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
                             ${iconSvg('users', 'h-3.5 w-3.5 text-accent')}
                             <span class="truncate">Akun Kasir</span>
-                        </button>
-                        <button type="button" data-dash-nav="${APP_VIEWS.OPERATING_HOURS}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
-                            ${iconSvg('clock', 'h-3.5 w-3.5 text-accent')}
-                            <span class="truncate">Jam Buka</span>
                         </button>
                         <button type="button" data-dash-nav="${APP_VIEWS.OWNER_AUDIT}" class="wn-btn-secondary min-w-0 justify-start gap-2 px-3 text-xs">
                             ${iconSvg('shield', 'h-3.5 w-3.5 text-accent')}
@@ -171,9 +200,9 @@ export function mountDashboardView(container) {
 
     function render() {
         const items = ordersPage?.data || [];
-        const warnings = scheduleStatus?.warnings || [];
         const hasFilter = search !== '' || paymentFilter !== '';
         const ownerMode = isOwner();
+        const scheduleNote = extractConciseScheduleNote(scheduleStatus);
 
         container.innerHTML = `
             <div class="space-y-5">
@@ -189,24 +218,23 @@ export function mountDashboardView(container) {
 
                 ${scheduleStatus ? `
                     <div data-motion-card class="wn-card px-4 py-3">
-                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <div class="flex flex-wrap items-center gap-2.5">
-                                <span class="text-xs font-semibold text-ink-muted">${escapeHtml(formatDateFullIndo(scheduleStatus.tanggal))}</span>
-                                ${badgeOperasional(scheduleStatus.status_jam_operasional)}
+                        <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="min-w-0 space-y-1">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="text-xs font-semibold text-ink">${escapeHtml(formatDateFullIndo(scheduleStatus.tanggal))}</span>
+                                    ${badgeOperasional(scheduleStatus.status_jam_operasional)}
+                                </div>
+                                ${scheduleNote ? `<p class="text-xs font-medium text-ink-muted">${escapeHtml(scheduleNote)}</p>` : ''}
                             </div>
                             <button
                                 id="dash-hours-link"
                                 type="button"
-                                class="wn-link inline-flex min-h-[32px] items-center text-left text-xs sm:text-right"
+                                class="wn-btn-secondary min-h-[34px] w-full justify-between gap-1.5 px-3 py-1.5 text-xs sm:w-auto sm:justify-center"
                             >
-                                ${ownerMode ? 'Kelola Jam Operasional →' : 'Lihat Jadwal →'}
+                                <span>Jam Operasional</span>
+                                ${iconSvg('chevronRight', 'h-3.5 w-3.5 text-ink-muted')}
                             </button>
                         </div>
-                        ${warnings.length > 0 ? `
-                            <p class="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900">
-                                ${warnings.map((w) => escapeHtml(w)).join(' ')}
-                            </p>
-                        ` : ''}
                     </div>
                 ` : ''}
 
@@ -214,39 +242,35 @@ export function mountDashboardView(container) {
 
                 ${summary ? `
                     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                        <div data-motion-card class="wn-card wn-interactive-card min-w-0 p-3.5 sm:p-4">
+                        <div data-motion-card class="wn-card wn-interactive-card flex min-w-0 flex-col justify-between p-3.5 sm:p-4">
                             <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
                                 <span>Antrean Aktif</span>
                                 <span class="rounded-lg bg-app-bg p-1.5 text-brand-navy">${iconSvg('clock', 'h-4 w-4')}</span>
                             </div>
-                            <p class="mt-2 text-2xl font-bold text-ink tabular-nums">${summary.antrean_aktif_total ?? 0}</p>
-                            <p class="mt-1 text-xs text-ink-muted">Berjalan ${summary.berjalan_count ?? 0} • Selesai belum bayar ${summary.selesai_belum_dibayar_count ?? 0}</p>
+                            <p class="mt-2.5 text-2xl font-bold text-ink tabular-nums">${summary.antrean_aktif_total ?? 0}</p>
                         </div>
-                        <div data-motion-card class="wn-card wn-interactive-card min-w-0 p-3.5 sm:p-4">
+                        <div data-motion-card class="wn-card wn-interactive-card flex min-w-0 flex-col justify-between p-3.5 sm:p-4">
                             <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
                                 <span>Belum Dibayar</span>
                                 <span class="rounded-lg bg-amber-50 p-1.5 text-warning">${iconSvg('wallet', 'h-4 w-4')}</span>
                             </div>
-                            <p class="mt-2 text-2xl font-bold text-warning tabular-nums">${summary.belum_dibayar_count ?? 0}</p>
-                            <p class="mt-1 text-xs text-ink-muted">Menunggu pelunasan</p>
+                            <p class="mt-2.5 text-2xl font-bold text-warning tabular-nums">${summary.belum_dibayar_count ?? 0}</p>
                         </div>
-                        <div data-motion-card class="wn-card wn-interactive-card min-w-0 p-3.5 sm:p-4">
+                        <div data-motion-card class="wn-card wn-interactive-card flex min-w-0 flex-col justify-between p-3.5 sm:p-4">
                             <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
                                 <span>Kendaraan Aktif</span>
                                 <span class="rounded-lg bg-blue-50 p-1.5 text-process">${iconSvg('car', 'h-4 w-4')}</span>
                             </div>
-                            <p class="mt-2 text-lg font-bold text-ink tabular-nums">
+                            <p class="mt-2.5 text-base font-bold text-ink tabular-nums sm:text-lg">
                                 ${summary.kendaraan_menunggu_count ?? 0} M • ${summary.kendaraan_proses_count ?? 0} P • ${summary.kendaraan_selesai_count ?? 0} S
                             </p>
-                            <p class="mt-1 text-xs text-ink-muted">Menunggu / Proses / Selesai</p>
                         </div>
-                        <div data-motion-card class="wn-card wn-interactive-card min-w-0 p-3.5 sm:p-4">
+                        <div data-motion-card class="wn-card wn-interactive-card flex min-w-0 flex-col justify-between p-3.5 sm:p-4">
                             <div class="flex items-center justify-between gap-1 text-xs font-medium text-ink-muted">
-                                <span>Pesanan Hari Ini (WIB)</span>
+                                <span>Pesanan</span>
                                 <span class="rounded-lg bg-green-50 p-1.5 text-success">${iconSvg('receipt', 'h-4 w-4')}</span>
                             </div>
-                            <p class="mt-2 text-2xl font-bold text-success tabular-nums">${summary.hari_ini_total_pesanan ?? 0}</p>
-                            <p class="mt-1 text-xs text-ink-muted">Selesai & lunas: ${summary.hari_ini_selesai_dibayar_count ?? 0}</p>
+                            <p class="mt-2.5 text-2xl font-bold text-success tabular-nums">${summary.hari_ini_total_pesanan ?? 0}</p>
                         </div>
                     </div>
                 ` : ''}

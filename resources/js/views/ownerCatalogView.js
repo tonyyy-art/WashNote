@@ -1,6 +1,6 @@
 import { washnoteApi } from '../api/client.js';
 import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
-import { APP_VIEWS, navigateTo, showToast } from '../state/store.js';
+import { APP_VIEWS, navigateBack, showToast } from '../state/store.js';
 import {
     badgeStatusAktif,
     escapeHtml,
@@ -56,7 +56,6 @@ export function mountOwnerCatalogView(container) {
             <div class="space-y-5">
                 ${renderPageHeader({
                     backBtnId: 'cat-back-btn',
-                    backLabel: '← Kembali ke Akun',
                     title: 'Katalog & Tarif Layanan',
                 })}
 
@@ -406,7 +405,7 @@ export function mountOwnerCatalogView(container) {
     }
 
     function bindEvents() {
-        container.querySelector('#cat-back-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.PROFILE));
+        container.querySelector('#cat-back-btn')?.addEventListener('click', () => navigateBack(APP_VIEWS.PROFILE));
         container.querySelector('#cat-retry-btn')?.addEventListener('click', loadCatalogMaster);
         container.querySelectorAll('[data-cat-tab]').forEach((btn) => {
             btn.addEventListener('click', () => {

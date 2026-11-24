@@ -1,6 +1,6 @@
 import { generateIdempotencyKey, washnoteApi } from '../api/client.js';
-import { createViewMotion } from '../motion/motionSystem.js';
-import { APP_VIEWS, navigateTo, showToast, state } from '../state/store.js';
+import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
+import { APP_VIEWS, navigateBack, showToast, state } from '../state/store.js';
 import {
     badgeKendaraan,
     badgeOperasional,
@@ -9,8 +9,16 @@ import {
     escapeHtml,
     formatDateTimeWib,
     formatRupiah,
+    iconSvg,
+    renderBackButton,
     renderErrorAlert,
 } from '../utils/formatters.js';
+import {
+    ensureLineUid,
+    parseOrderValidationError,
+    renderOrderErrorSummary,
+    renderVehicleServiceCard,
+} from '../utils/orderFormHelpers.js';
 
 export function mountOrderDetailView(container, orderId) {
     const motion = createViewMotion(container);
@@ -27,6 +35,7 @@ export function mountOrderDetailView(container, orderId) {
     let editCatatan = '';
     let editAlasan = '';
     let editVehicles = [];
+    const expandedEditLines = new Set();
     let cancelReason = '';
 
     async function loadOrder() {
@@ -58,18 +67,35 @@ export function mountOrderDetailView(container, orderId) {
             return;
         }
 
+        expandedEditLines.clear();
         editCatatan = order.catatan || '';
 
         editVehicles = (order.kendaraan || []).map((v) => ({
             id_kendaraan_pesanan: Number(v.id_kendaraan_pesanan),
             id_kategori_kendaraan: Number(v.id_kategori_kendaraan),
             plat_nomor: v.plat_nomor || '',
-            layanan: (v.detail_layanan || []).map((d) => ({
-                id_harga: Number(d.id_harga),
-                harga_akhir: Number(d.harga_akhir),
-                alasan_penyesuaian: d.alasan_penyesuaian || '',
-            })),
+            layanan: (v.detail_layanan || []).map((d) => {
+                const line = {
+                    id_harga: Number(d.id_harga),
+                    harga_akhir: Number(d.harga_akhir),
+                    alasan_penyesuaian: d.alasan_penyesuaian || '',
+                };
+                ensureLineUid(line);
+                return line;
+            }),
         }));
+    }
+
+    function collectOrderSnapshotTariffs() {
+        const extra = [];
+        for (const veh of order?.kendaraan || []) {
+            for (const det of veh.detail_layanan || []) {
+                if (det.harga_layanan) {
+                    extra.push(det.harga_layanan);
+                }
+            }
+        }
+        return extra;
     }
 
     function tariffsForCategory(kategoriId) {
@@ -177,6 +203,9 @@ export function mountOrderDetailView(container, orderId) {
         } finally {
             isSubmitting = false;
             render();
+            if (errorObj && container.querySelector('[data-inline-error="true"]')) {
+                scrollToElement('[data-inline-error="true"]');
+            }
         }
     }
 
@@ -268,7 +297,7 @@ export function mountOrderDetailView(container, orderId) {
             }
             veh.layanan.forEach((line, lIdx) => {
                 const priceEl = container.querySelector(`[data-edit-price="${vIdx}-${lIdx}"]`);
-                const reasonEl = container.querySelector(`[data-edit-line-reason="${vIdx}-${lIdx}"]`);
+                const reasonEl = container.querySelector(`[data-edit-reason="${vIdx}-${lIdx}"]`);
                 if (priceEl) {
                     line.harga_akhir = priceEl.value;
                 }
@@ -293,22 +322,23 @@ export function mountOrderDetailView(container, orderId) {
         if (!order) {
             container.innerHTML = `
                 <div class="space-y-4">
-                    <button id="detail-back-orders" type="button" class="wn-link inline-flex min-h-[32px] items-center text-xs">← Kembali ke Daftar Pesanan</button>
+                    <div>${renderBackButton({ id: 'detail-back-orders' })}</div>
                     ${errorObj ? renderErrorAlert(errorObj) : '<div class="wn-card p-6 text-sm text-ink-muted">Pesanan tidak ditemukan.</div>'}
                 </div>
             `;
-            container.querySelector('#detail-back-orders')?.addEventListener('click', () => navigateTo(APP_VIEWS.ORDERS));
+            container.querySelector('#detail-back-orders')?.addEventListener('click', () => navigateBack(APP_VIEWS.ORDERS));
             return;
         }
 
         const isCancelled = order.status_pesanan === 'dibatalkan';
         const isPaid = order.pembayaran?.status_pembayaran === 'sudah_dibayar';
+        const parsedOrderErr = activeTab === 'edit' ? parseOrderValidationError(errorObj, editVehicles, catalog, collectOrderSnapshotTariffs()) : null;
 
         container.innerHTML = `
             <div class="space-y-6">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                        <button id="detail-back-orders" type="button" class="wn-link mb-1 inline-flex min-h-[32px] items-center text-xs">← Kembali ke Daftar Pesanan</button>
+                    <div class="min-w-0">
+                        <div class="mb-2">${renderBackButton({ id: 'detail-back-orders' })}</div>
                         <div class="flex flex-wrap items-center gap-2.5">
                             <h1 class="font-mono text-2xl font-bold text-ink">${escapeHtml(order.nomor_nota || `#${order.id_pesanan}`)}</h1>
                             ${badgePesanan(order.status_pesanan)}
@@ -326,7 +356,7 @@ export function mountOrderDetailView(container, orderId) {
                     </div>
                 </div>
 
-                ${errorObj ? renderErrorAlert(errorObj) : ''}
+                ${errorObj ? (parsedOrderErr ? renderOrderErrorSummary(parsedOrderErr) : renderErrorAlert(errorObj)) : ''}
 
                 <div class="flex flex-wrap gap-2 border-b border-border-subtle pb-2">
                     ${[
@@ -349,7 +379,7 @@ export function mountOrderDetailView(container, orderId) {
 
                 <div data-motion-tabpanel>
                     ${activeTab === 'detail' ? renderDetailTab(isCancelled) : ''}
-                    ${activeTab === 'edit' ? renderEditTab(isCancelled, isPaid) : ''}
+                    ${activeTab === 'edit' ? renderEditTab(isCancelled, isPaid, parsedOrderErr) : ''}
                     ${activeTab === 'payment' ? renderPaymentTab(isCancelled, isPaid) : ''}
                     ${activeTab === 'cancel' ? renderCancelTab(isCancelled) : ''}
                 </div>
@@ -445,105 +475,51 @@ export function mountOrderDetailView(container, orderId) {
         `;
     }
 
-    function renderEditTab(isCancelled, isPaid) {
+    function renderEditTab(isCancelled, isPaid, parsedError = null) {
         if (isCancelled) {
             return '<div class="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-900">Pesanan yang telah dibatalkan tidak dapat diedit.</div>';
         }
 
         return `
-            <form id="order-edit-form" class="space-y-4">
+            <form id="order-edit-form" novalidate class="space-y-4">
                 ${isPaid ? `
                     <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
-                        <p class="font-bold">Pesanan Sudah Dibayar — Edit Penuh Tetap Diizinkan</p>
-                        <p class="mt-1">Anda dapat mengubah kendaraan, layanan, harga akhir, plat nomor, maupun catatan beserta alasan audit wajib. Catatan transaksi pembayaran yang sudah tercatat dan laporan keuangan omzet tetap dijaga utuh.</p>
+                        <p class="font-bold">Pesanan Sudah Dibayar — Edit Penuh Diizinkan</p>
+                        <p class="mt-1">Perubahan kendaraan, layanan, harga akhir, plat nomor, atau catatan wajib disertai alasan audit.</p>
                     </div>
                 ` : ''}
 
-                <div class="wn-card p-4 shadow-xs sm:p-5">
+                <div class="space-y-4">
                     <div class="flex flex-wrap items-center justify-between gap-2">
-                        <h3 class="text-base font-bold text-ink">Edit Kendaraan, Layanan & Harga</h3>
-                        <button type="button" id="edit-add-veh-btn" class="inline-flex min-h-[36px] items-center rounded-xl border border-accent-border bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent transition active:scale-[0.98] hover:bg-teal-100/70">+ Tambah Kendaraan</button>
+                        <h3 class="text-base font-bold text-ink">Kendaraan, Layanan & Harga</h3>
+                        <button type="button" id="edit-add-veh-btn" class="inline-flex min-h-[38px] items-center rounded-xl border border-accent-border bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent transition active:scale-[0.98] hover:bg-teal-100/70">+ Tambah Kendaraan</button>
                     </div>
 
-                    <div class="mt-4 space-y-4">
-                        ${editVehicles.map((veh, vIdx) => {
-                            const existingIds = veh.layanan.map((l) => Number(l.id_harga));
-                            const options = tariffOptionsForVehicle(veh.id_kategori_kendaraan, existingIds);
+                    ${editVehicles.map((veh, vIdx) => {
+                        const existingIds = veh.layanan.map((l) => Number(l.id_harga));
+                        return renderVehicleServiceCard({
+                            veh,
+                            vIdx,
+                            totalVehicles: editVehicles.length,
+                            categories: catalog.kategori_kendaraan,
+                            availableTariffs: tariffOptionsForVehicle(veh.id_kategori_kendaraan, existingIds),
+                            expandedLines: expandedEditLines,
+                            parsedError,
+                            prefix: 'edit',
+                            compactCard: true,
+                        });
+                    }).join('')}
 
-                            return `
-                                <div class="rounded-xl border border-border-subtle bg-app-bg/70 p-4">
-                                    <div class="flex items-center justify-between border-b border-border-subtle pb-2">
-                                        <span class="text-xs font-bold uppercase text-ink">Kendaraan #${vIdx + 1}</span>
-                                        ${editVehicles.length > 1 ? `<button type="button" data-edit-remove-veh="${vIdx}" class="inline-flex min-h-[32px] items-center rounded-md px-2 text-xs font-semibold text-danger hover:bg-red-50">Hapus Kendaraan</button>` : ''}
-                                    </div>
-                                    <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                                        <div>
-                                            <label class="wn-label">Kategori Kendaraan</label>
-                                            <select data-edit-cat="${vIdx}" class="wn-select">
-                                                ${catalog.kategori_kendaraan.map((kat) => `
-                                                    <option value="${kat.id_kategori_kendaraan}" ${Number(kat.id_kategori_kendaraan) === Number(veh.id_kategori_kendaraan) ? 'selected' : ''}>
-                                                        ${escapeHtml(kat.nama_kategori)}
-                                                    </option>
-                                                `).join('')}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label class="wn-label">Plat Nomor</label>
-                                            <input type="text" maxlength="20" data-edit-plat="${vIdx}" value="${escapeHtml(veh.plat_nomor)}" class="wn-input uppercase" />
-                                        </div>
-                                    </div>
-
-                                    <div class="mt-3 space-y-2.5">
-                                        <div class="flex flex-wrap items-center justify-between gap-2">
-                                            <span class="text-xs font-semibold text-ink-muted">Layanan</span>
-                                            <button type="button" data-edit-add-line="${vIdx}" class="wn-link inline-flex min-h-[32px] items-center rounded-md px-2 text-xs hover:bg-primary-soft">+ Tambah Layanan</button>
-                                        </div>
-                                        ${veh.layanan.map((line, lIdx) => {
-                                            const t = options.find((o) => Number(o.id_harga) === Number(line.id_harga)) || options[0];
-                                            return `
-                                                <div class="rounded-lg border border-border-subtle bg-surface p-3">
-                                                    <div class="grid gap-3 md:grid-cols-12">
-                                                        <div class="md:col-span-6">
-                                                            <label class="wn-label">Pilih Layanan</label>
-                                                            <select data-edit-tariff="${vIdx}-${lIdx}" class="wn-select text-xs">
-                                                                ${options.map((opt) => `
-                                                                    <option value="${opt.id_harga}" ${Number(opt.id_harga) === Number(line.id_harga) ? 'selected' : ''}>
-                                                                        [${escapeHtml(opt.layanan?.tipe_layanan || 'utama')}] ${escapeHtml(opt.layanan?.nama_layanan || 'Layanan')} (${escapeHtml(formatRupiah(opt.harga_dasar))})
-                                                                    </option>
-                                                                `).join('')}
-                                                            </select>
-                                                        </div>
-                                                        <div class="md:col-span-4">
-                                                            <label class="wn-label">
-                                                                Harga Akhir
-                                                                ${t ? `<span class="font-normal text-ink-muted">(${escapeHtml(formatRupiah(t.batas_bawah))} – ${escapeHtml(formatRupiah(t.batas_atas))})</span>` : ''}
-                                                            </label>
-                                                            <input type="number" min="0" step="1" data-edit-price="${vIdx}-${lIdx}" value="${escapeHtml(line.harga_akhir)}" class="wn-input text-xs tabular-nums" />
-                                                        </div>
-                                                        <div class="flex items-end justify-end md:col-span-2">
-                                                            ${veh.layanan.length > 1 ? `<button type="button" data-edit-remove-line="${vIdx}-${lIdx}" class="min-h-[36px] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-danger hover:bg-red-50">Hapus</button>` : ''}
-                                                        </div>
-                                                    </div>
-                                                    <div class="mt-2.5">
-                                                        <input type="text" data-edit-line-reason="${vIdx}-${lIdx}" value="${escapeHtml(line.alasan_penyesuaian)}" placeholder="Alasan penyesuaian harga (wajib jika harga akhir != harga dasar)" class="wn-input min-h-[36px] py-1.5 text-xs" />
-                                                    </div>
-                                                </div>
-                                            `;
-                                        }).join('')}
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-
-                    <div class="mt-4 space-y-3 border-t border-border-subtle pt-4">
+                    <div class="wn-card space-y-3.5 p-4 sm:p-5">
                         <div>
                             <label for="edit-order-catatan" class="wn-label">Catatan Pesanan</label>
-                            <textarea id="edit-order-catatan" rows="2" class="wn-textarea">${escapeHtml(editCatatan)}</textarea>
+                            <textarea id="edit-order-catatan" rows="2" class="wn-textarea ${parsedError?.topErrors?.catatan ? 'wn-textarea-error' : ''}">${escapeHtml(editCatatan)}</textarea>
+                            ${parsedError?.topErrors?.catatan ? `<p class="wn-error-inline" data-inline-error="true">${iconSvg('alertCircle', 'mt-0.5 h-3.5 w-3.5')}<span>${escapeHtml(parsedError.topErrors.catatan)}</span></p>` : ''}
                         </div>
                         <div>
-                            <label for="edit-order-alasan" class="wn-label">Alasan Edit Pesanan (Wajib, min. 5 karakter)</label>
-                            <input id="edit-order-alasan" type="text" required minlength="5" value="${escapeHtml(editAlasan)}" placeholder="Contoh: Pelanggan menambah layanan semir ban atau koreksi harga" class="wn-input" />
+                            <label for="edit-order-alasan" class="wn-label">Alasan Edit Pesanan <span class="text-danger">*</span> <span class="font-normal text-ink-muted">(Min. 5 karakter)</span></label>
+                            <input id="edit-order-alasan" type="text" required minlength="5" value="${escapeHtml(editAlasan)}" placeholder="Contoh: Tambah layanan semir ban atau koreksi harga" class="wn-input ${parsedError?.topErrors?.alasan ? 'wn-input-error' : ''}" />
+                            ${parsedError?.topErrors?.alasan ? `<p class="wn-error-inline" data-inline-error="true">${iconSvg('alertCircle', 'mt-0.5 h-3.5 w-3.5')}<span>${escapeHtml(parsedError.topErrors.alasan)}</span></p>` : ''}
                         </div>
                         <button type="submit" ${isSubmitting ? 'disabled' : ''} class="wn-btn-primary w-full py-2.5 sm:w-auto">
                             ${isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan Pesanan'}
@@ -630,7 +606,7 @@ export function mountOrderDetailView(container, orderId) {
     }
 
     function bindDetailEvents(isPaid) {
-        container.querySelector('#detail-back-orders')?.addEventListener('click', () => navigateTo(APP_VIEWS.ORDERS));
+        container.querySelector('#detail-back-orders')?.addEventListener('click', () => navigateBack(APP_VIEWS.ORDERS));
 
         container.querySelectorAll('[data-detail-tab]').forEach((btn) => {
             btn.addEventListener('click', () => {
@@ -658,14 +634,19 @@ export function mountOrderDetailView(container, orderId) {
             syncEditDom();
             const firstKat = catalog.kategori_kendaraan[0];
             const katId = firstKat ? Number(firstKat.id_kategori_kendaraan) : 0;
-            const firstTariff = tariffsForCategory(katId)[0];
+            const matching = tariffsForCategory(katId);
+            const firstMain = matching.find((t) => (t.layanan?.tipe_layanan || 'utama') === 'utama') || matching[0];
+            const firstLine = firstMain
+                ? { id_harga: Number(firstMain.id_harga), harga_akhir: Number(firstMain.harga_dasar), alasan_penyesuaian: '' }
+                : null;
+            if (firstLine) {
+                ensureLineUid(firstLine);
+            }
             editVehicles.push({
                 id_kendaraan_pesanan: null,
                 id_kategori_kendaraan: katId,
                 plat_nomor: '',
-                layanan: firstTariff
-                    ? [{ id_harga: Number(firstTariff.id_harga), harga_akhir: Number(firstTariff.harga_dasar), alasan_penyesuaian: '' }]
-                    : [],
+                layanan: firstLine ? [firstLine] : [],
             });
             render();
         });
@@ -684,48 +665,76 @@ export function mountOrderDetailView(container, orderId) {
                 const vIdx = Number(sel.getAttribute('data-edit-cat'));
                 const nextKat = Number(sel.value);
                 const matching = tariffsForCategory(nextKat);
+                const firstMain = matching.find((t) => (t.layanan?.tipe_layanan || 'utama') === 'utama') || matching[0];
+                const firstLine = firstMain
+                    ? { id_harga: Number(firstMain.id_harga), harga_akhir: Number(firstMain.harga_dasar), alasan_penyesuaian: '' }
+                    : null;
+                if (firstLine) {
+                    ensureLineUid(firstLine);
+                }
                 editVehicles[vIdx].id_kategori_kendaraan = nextKat;
-                editVehicles[vIdx].layanan = matching[0]
-                    ? [{ id_harga: Number(matching[0].id_harga), harga_akhir: Number(matching[0].harga_dasar), alasan_penyesuaian: '' }]
-                    : [];
+                editVehicles[vIdx].layanan = firstLine ? [firstLine] : [];
                 render();
             });
         });
 
-        container.querySelectorAll('[data-edit-add-line]').forEach((btn) => {
-            btn.addEventListener('click', () => {
+        container.querySelectorAll('[data-edit-pick-main], [data-edit-pick-addon]').forEach((sel) => {
+            sel.addEventListener('change', () => {
+                const chosen = Number(sel.value);
+                if (!chosen) {
+                    return;
+                }
+                const vIdx = Number(sel.getAttribute('data-edit-pick-main') ?? sel.getAttribute('data-edit-pick-addon'));
                 syncEditDom();
-                const vIdx = Number(btn.getAttribute('data-edit-add-line'));
-                const matching = tariffsForCategory(editVehicles[vIdx].id_kategori_kendaraan);
-                if (matching[0]) {
-                    editVehicles[vIdx].layanan.push({
-                        id_harga: Number(matching[0].id_harga),
-                        harga_akhir: Number(matching[0].harga_dasar),
+                const existingIds = editVehicles[vIdx].layanan.map((l) => Number(l.id_harga));
+                const options = tariffOptionsForVehicle(editVehicles[vIdx].id_kategori_kendaraan, existingIds);
+                const tariff = options.find((o) => Number(o.id_harga) === chosen);
+                if (tariff) {
+                    const line = {
+                        id_harga: Number(tariff.id_harga),
+                        harga_akhir: Number(tariff.harga_dasar),
                         alasan_penyesuaian: '',
-                    });
+                    };
+                    ensureLineUid(line);
+                    editVehicles[vIdx].layanan.push(line);
                     render();
                 }
             });
         });
 
-        container.querySelectorAll('[data-edit-remove-line]').forEach((btn) => {
+        container.querySelectorAll('[data-edit-toggle-price]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 syncEditDom();
-                const [vIdx, lIdx] = btn.getAttribute('data-edit-remove-line').split('-').map(Number);
-                editVehicles[vIdx].layanan.splice(lIdx, 1);
+                const [vIdx, lIdx] = btn.getAttribute('data-edit-toggle-price').split('-').map(Number);
+                const line = editVehicles[vIdx]?.layanan?.[lIdx];
+                if (!line) {
+                    return;
+                }
+                const uid = ensureLineUid(line);
+                if (expandedEditLines.has(uid)) {
+                    expandedEditLines.delete(uid);
+                } else {
+                    expandedEditLines.add(uid);
+                }
                 render();
             });
         });
 
-        container.querySelectorAll('[data-edit-tariff]').forEach((sel) => {
-            sel.addEventListener('change', () => {
+        container.querySelectorAll('[data-edit-remove-service]').forEach((btn) => {
+            btn.addEventListener('click', () => {
                 syncEditDom();
-                const [vIdx, lIdx] = sel.getAttribute('data-edit-tariff').split('-').map(Number);
-                const idHarga = Number(sel.value);
-                const tariff = catalog.harga_layanan.find((t) => Number(t.id_harga) === idHarga);
-                editVehicles[vIdx].layanan[lIdx].id_harga = idHarga;
-                editVehicles[vIdx].layanan[lIdx].harga_akhir = tariff ? Number(tariff.harga_dasar) : 0;
-                editVehicles[vIdx].layanan[lIdx].alasan_penyesuaian = '';
+                const [vIdx, lIdx] = btn.getAttribute('data-edit-remove-service').split('-').map(Number);
+                const removed = editVehicles[vIdx].layanan.splice(lIdx, 1)[0];
+                if (removed?._uid) {
+                    expandedEditLines.delete(removed._uid);
+                }
+                render();
+            });
+        });
+
+        container.querySelectorAll('[data-edit-price]').forEach((input) => {
+            input.addEventListener('change', () => {
+                syncEditDom();
                 render();
             });
         });

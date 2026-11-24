@@ -1,6 +1,6 @@
 import { washnoteApi } from '../api/client.js';
 import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
-import { APP_VIEWS, isOwner, navigateTo, showToast } from '../state/store.js';
+import { APP_VIEWS, isOwner, navigateBack, showToast } from '../state/store.js';
 import {
     badgeOperasional,
     escapeHtml,
@@ -66,9 +66,8 @@ export function mountOperatingHoursView(container) {
             <div class="space-y-5">
                 ${renderPageHeader({
                     backBtnId: 'hours-back-btn',
-                    backLabel: ownerMode ? '← Kembali ke Akun' : '← Kembali ke Beranda',
                     title: 'Jam Operasional',
-                    subtitle: 'Asia/Jakarta (WIB) • Tutup maksimal 21.00 WIB',
+                    subtitle: 'Tutup maksimal pukul 21.00',
                 })}
 
                 ${errorObj && weeklyList.length > 0 ? renderErrorAlert(errorObj) : ''}
@@ -239,7 +238,7 @@ export function mountOperatingHoursView(container) {
 
     function bindEvents() {
         container.querySelector('#hours-back-btn')?.addEventListener('click', () => {
-            navigateTo(isOwner() ? APP_VIEWS.PROFILE : APP_VIEWS.DASHBOARD);
+            navigateBack(isOwner() ? APP_VIEWS.PROFILE : APP_VIEWS.DASHBOARD);
         });
         container.querySelector('#hours-retry-btn')?.addEventListener('click', loadAll);
         container.querySelector('#cancel-edit-weekly')?.addEventListener('click', () => {

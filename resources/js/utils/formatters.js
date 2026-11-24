@@ -29,6 +29,7 @@ export function iconSvg(name, cls = 'h-4 w-4') {
         checkCircle: '<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />',
         alertCircle: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />',
         plus: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />',
+        arrowLeft: '<path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />',
         chevronRight: '<path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />',
         logout: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />',
         menu: '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />',
@@ -226,7 +227,7 @@ export function badgePembayaran(status) {
 
 export function badgeOperasional(status) {
     const map = {
-        dalam_jam: ['Dalam Jam Operasional', 'bg-green-50 text-success ring-green-600/20'],
+        dalam_jam: ['Buka', 'bg-green-50 text-success ring-green-600/20'],
         di_luar_jam: ['Di Luar Jam Buka', 'bg-amber-50 text-warning ring-amber-600/20'],
         hari_libur: ['Hari Libur', 'bg-red-50 text-danger ring-red-600/20'],
         belum_dikonfigurasi: ['Jadwal Belum Lengkap', 'bg-slate-100 text-ink-muted ring-slate-500/20'],
@@ -243,11 +244,20 @@ export function badgeStatusAktif(isAktif) {
         : '<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-ink-muted ring-1 ring-inset ring-slate-500/20">Nonaktif</span>';
 }
 
-export function renderPageHeader({ title, subtitle = '', backBtnId = '', backLabel = '← Kembali', actionsHtml = '' }) {
+export function renderBackButton({ id, label = 'Kembali', cls = '' }) {
+    return `
+        <button id="${escapeHtml(id)}" type="button" class="wn-back-btn ${escapeHtml(cls)}">
+            ${iconSvg('arrowLeft', 'h-3.5 w-3.5 text-ink-muted')}
+            <span>${escapeHtml(label)}</span>
+        </button>
+    `;
+}
+
+export function renderPageHeader({ title, subtitle = '', backBtnId = '', backLabel = 'Kembali', actionsHtml = '' }) {
     return `
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="min-w-0">
-                ${backBtnId ? `<button id="${escapeHtml(backBtnId)}" type="button" class="wn-link mb-1 inline-flex min-h-[32px] items-center text-xs">${escapeHtml(backLabel)}</button>` : ''}
+                ${backBtnId ? `<div class="mb-2">${renderBackButton({ id: backBtnId, label: backLabel })}</div>` : ''}
                 <h1 class="text-xl font-bold tracking-tight text-ink sm:text-2xl">${escapeHtml(title)}</h1>
                 ${subtitle ? `<p class="mt-0.5 text-sm text-ink-muted">${escapeHtml(subtitle)}</p>` : ''}
             </div>
@@ -339,6 +349,34 @@ export function extractErrorMessage(err) {
     return err.message || 'Permintaan gagal diproses.';
 }
 
+const FIELD_DISPLAY_LABELS = {
+    username: 'Username',
+    password: 'Kata Sandi',
+    current_password: 'Kata Sandi Saat Ini',
+    new_password: 'Kata Sandi Baru',
+    new_password_confirmation: 'Konfirmasi Kata Sandi',
+    nama_lengkap: 'Nama Lengkap',
+    nama_kategori: 'Nama Kategori',
+    jenis_kendaraan: 'Jenis Kendaraan',
+    nama_layanan: 'Nama Layanan',
+    tipe_layanan: 'Tipe Layanan',
+    harga_dasar: 'Harga Dasar',
+    batas_bawah: 'Batas Bawah',
+    batas_atas: 'Batas Atas',
+    id_kategori_pengeluaran: 'Kategori Pengeluaran',
+    tanggal_pengeluaran: 'Tanggal Pengeluaran',
+    deskripsi: 'Deskripsi',
+    nominal: 'Nominal',
+    alasan: 'Alasan Perubahan',
+    alasan_pembatalan: 'Alasan Pembatalan',
+    jumlah_dibayar: 'Nominal Pembayaran',
+    metode_pembayaran: 'Metode Pembayaran',
+    jam_buka: 'Jam Buka',
+    jam_tutup: 'Jam Tutup',
+    tanggal: 'Tanggal',
+    keterangan: 'Keterangan',
+};
+
 export function renderErrorAlert(err) {
     if (!err) {
         return '';
@@ -348,9 +386,10 @@ export function renderErrorAlert(err) {
 
     if (err.errors && typeof err.errors === 'object') {
         for (const [field, messages] of Object.entries(err.errors)) {
+            const label = FIELD_DISPLAY_LABELS[field] || field.replace(/_/g, ' ');
             if (Array.isArray(messages)) {
                 for (const msg of messages) {
-                    fieldErrors.push(`<li><span class="font-medium">${escapeHtml(field)}:</span> ${escapeHtml(msg)}</li>`);
+                    fieldErrors.push(`<li><span class="font-semibold">${escapeHtml(label)}:</span> ${escapeHtml(msg)}</li>`);
                 }
             }
         }
@@ -358,8 +397,13 @@ export function renderErrorAlert(err) {
 
     return `
         <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">
-            <p class="font-semibold">${escapeHtml(err.message || 'Gagal memproses permintaan.')}</p>
-            ${fieldErrors.length > 0 ? `<ul class="mt-1.5 list-disc space-y-0.5 pl-5 text-xs">${fieldErrors.join('')}</ul>` : ''}
+            <div class="flex items-start gap-2.5">
+                ${iconSvg('alertCircle', 'mt-0.5 h-4 w-4 text-danger')}
+                <div class="min-w-0 flex-1">
+                    <p class="font-semibold">${escapeHtml(err.message || 'Gagal memproses permintaan.')}</p>
+                    ${fieldErrors.length > 0 ? `<ul class="mt-1.5 list-disc space-y-0.5 pl-4 text-xs">${fieldErrors.join('')}</ul>` : ''}
+                </div>
+            </div>
         </div>
     `;
 }

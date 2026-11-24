@@ -68,7 +68,7 @@ export function mountProfileView(container, onSessionEnded) {
         const ownerMode = isOwner();
 
         container.innerHTML = `
-            <div class="max-w-2xl space-y-6">
+            <div class="max-w-3xl space-y-6">
                 ${renderPageHeader({ title: 'Pengaturan Akun' })}
 
                 ${errorObj ? renderErrorAlert(errorObj) : ''}
@@ -106,9 +106,11 @@ export function mountProfileView(container, onSessionEnded) {
                             ${[
                                 [APP_VIEWS.OWNER_STAFF, 'users', 'Kelola Akun Kasir', 'Tambah staf, status aktif, dan reset sandi'],
                                 [APP_VIEWS.OWNER_CATALOG, 'tag', 'Katalog & Tarif', 'Kategori kendaraan, layanan, dan batas harga'],
+                                [APP_VIEWS.OWNER_EXPENSES, 'receipt', 'Pengeluaran', 'Daftar dan pencatatan biaya operasional'],
+                                [APP_VIEWS.OWNER_EXPENSE_CATEGORIES, 'wallet', 'Kategori Pengeluaran', 'Kelola kategori biaya operasional'],
+                                [APP_VIEWS.OWNER_REPORTS, 'chart', 'Laporan Keuangan', 'Pendapatan, pengeluaran, dan rincian harian'],
                                 [APP_VIEWS.OPERATING_HOURS, 'clock', 'Jam Operasional', 'Jadwal mingguan & pengecualian hari libur'],
-                                [APP_VIEWS.ORDERS, 'receipt', 'Riwayat & Daftar Pesanan', 'Cari transaksi, ubah, atau batalkan pesanan'],
-                                [APP_VIEWS.OWNER_FINANCE, 'wallet', 'Pengeluaran & Laporan', 'Kategori biaya, pengeluaran, dan laporan omzet'],
+                                [APP_VIEWS.ORDERS, 'history', 'Riwayat & Daftar Pesanan', 'Cari transaksi, ubah, atau batalkan pesanan'],
                                 [APP_VIEWS.OWNER_AUDIT, 'shield', 'Audit Perubahan', 'Riwayat perubahan pesanan, tarif, & akun'],
                             ].map(([view, icon, title, desc]) => `
                                 <button
@@ -144,7 +146,7 @@ export function mountProfileView(container, onSessionEnded) {
                                 </span>
                                 <div>
                                     <p class="text-sm font-bold text-ink">Jadwal Jam Operasional</p>
-                                    <p class="mt-0.5 text-xs text-ink-muted">Lihat jam buka mingguan dan hari libur gerai (WIB)</p>
+                                    <p class="mt-0.5 text-xs text-ink-muted">Lihat jadwal jam buka mingguan dan hari libur gerai</p>
                                 </div>
                             </div>
                             ${iconSvg('chevronRight', 'h-4 w-4 text-ink-muted')}
@@ -180,12 +182,7 @@ export function mountProfileView(container, onSessionEnded) {
 
         container.querySelectorAll('[data-prof-nav]').forEach((btn) => {
             btn.addEventListener('click', () => {
-                const target = btn.getAttribute('data-prof-nav');
-                if (target === APP_VIEWS.OWNER_FINANCE) {
-                    navigateTo(target, { financeTab: 'reports' });
-                } else {
-                    navigateTo(target);
-                }
+                navigateTo(btn.getAttribute('data-prof-nav'));
             });
         });
 

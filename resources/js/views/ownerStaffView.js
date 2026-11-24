@@ -1,6 +1,6 @@
 import { washnoteApi } from '../api/client.js';
 import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
-import { APP_VIEWS, navigateTo, showToast } from '../state/store.js';
+import { APP_VIEWS, navigateBack, showToast } from '../state/store.js';
 import {
     badgeStatusAktif,
     escapeHtml,
@@ -49,7 +49,6 @@ export function mountOwnerStaffView(container) {
             <div class="space-y-5">
                 ${renderPageHeader({
                     backBtnId: 'staff-back-btn',
-                    backLabel: '← Kembali ke Akun',
                     title: 'Akun Kasir',
                 })}
 
@@ -254,7 +253,7 @@ export function mountOwnerStaffView(container) {
     }
 
     function bindEvents(selected) {
-        container.querySelector('#staff-back-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.PROFILE));
+        container.querySelector('#staff-back-btn')?.addEventListener('click', () => navigateBack(APP_VIEWS.PROFILE));
         container.querySelector('#kasir-retry-btn')?.addEventListener('click', loadStaff);
         container.querySelector('#kasir-reset-filter-btn')?.addEventListener('click', () => {
             filters = { status: 'all', search: '', page: 1 };

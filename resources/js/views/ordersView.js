@@ -1,6 +1,6 @@
 import { generateIdempotencyKey, washnoteApi } from '../api/client.js';
-import { createViewMotion } from '../motion/motionSystem.js';
-import { APP_VIEWS, isOwner, navigateTo, showToast } from '../state/store.js';
+import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
+import { APP_VIEWS, isOwner, navigateBack, navigateTo, showToast } from '../state/store.js';
 import {
     badgeOperasional,
     badgePembayaran,
@@ -14,6 +14,12 @@ import {
     renderPageHeader,
     renderPaginationBar,
 } from '../utils/formatters.js';
+import {
+    ensureLineUid,
+    parseOrderValidationError,
+    renderOrderErrorSummary,
+    renderVehicleServiceCard,
+} from '../utils/orderFormHelpers.js';
 
 export function mountOrdersListView(container) {
     const motion = createViewMotion(container);
@@ -62,8 +68,9 @@ export function mountOrdersListView(container) {
         container.innerHTML = `
             <div class="space-y-5">
                 ${renderPageHeader({
+                    backBtnId: 'orders-back-btn',
                     title: 'Riwayat & Daftar Pesanan',
-                    actionsHtml: '<button id="orders-new-btn" type="button" class="wn-btn-primary">+ Buat Pesanan</button>',
+                    actionsHtml: '<button id="orders-new-btn" type="button" class="wn-btn-primary w-full sm:w-auto">+ Buat Pesanan</button>',
                 })}
 
                 <div data-motion-card class="wn-card p-4">
@@ -275,6 +282,7 @@ export function mountOrdersListView(container) {
             </div>
         `;
 
+        container.querySelector('#orders-back-btn')?.addEventListener('click', () => navigateBack(APP_VIEWS.DASHBOARD));
         container.querySelector('#orders-new-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.ORDER_CREATE));
         container.querySelector('#orders-empty-new-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.ORDER_CREATE));
         container.querySelector('#orders-retry-btn')?.addEventListener('click', loadOrders);
@@ -330,6 +338,7 @@ export function mountOrderCreateView(container) {
     let lastSubmittedSignature = null;
 
     let vehicles = [];
+    const expandedPriceLines = new Set();
 
     function resetKeyIfPayloadChanged() {
         const sig = JSON.stringify({ catatan, vehicles });
@@ -343,24 +352,26 @@ export function mountOrderCreateView(container) {
         return (catalog.harga_layanan || []).filter((h) => Number(h.id_kategori_kendaraan) === Number(kategoriId));
     }
 
+    function makeServiceLineFromTariff(tariff) {
+        const line = {
+            id_harga: Number(tariff.id_harga),
+            harga_akhir: Number(tariff.harga_dasar),
+            alasan_penyesuaian: '',
+        };
+        ensureLineUid(line);
+        return line;
+    }
+
     function buildDefaultVehicle() {
         const firstKat = catalog.kategori_kendaraan[0];
         const katId = firstKat ? Number(firstKat.id_kategori_kendaraan) : '';
         const matchingTariffs = katId ? tariffsForCategory(katId) : [];
-        const firstTariff = matchingTariffs[0];
+        const firstMain = matchingTariffs.find((t) => (t.layanan?.tipe_layanan || 'utama') === 'utama') || matchingTariffs[0];
 
         return {
             id_kategori_kendaraan: katId,
             plat_nomor: '',
-            layanan: firstTariff
-                ? [
-                      {
-                          id_harga: Number(firstTariff.id_harga),
-                          harga_akhir: Number(firstTariff.harga_dasar),
-                          alasan_penyesuaian: '',
-                      },
-                  ]
-                : [],
+            layanan: firstMain ? [makeServiceLineFromTariff(firstMain)] : [],
         };
     }
 
@@ -372,7 +383,10 @@ export function mountOrderCreateView(container) {
             for (const item of veh.layanan) {
                 const tariff = catalog.harga_layanan.find((t) => Number(t.id_harga) === Number(item.id_harga));
                 const tipe = tariff?.layanan?.tipe_layanan || 'utama';
-                const nominal = Number(item.harga_akhir ?? tariff?.harga_dasar ?? 0);
+                const rawVal = Number(item.harga_akhir ?? tariff?.harga_dasar ?? 0);
+                const nominal = item.harga_akhir === '' || item.harga_akhir === null || Number.isNaN(rawVal)
+                    ? Number(tariff?.harga_dasar ?? 0)
+                    : rawVal;
 
                 if (tipe === 'tambahan') {
                     subtotalTambahan += nominal;
@@ -430,7 +444,8 @@ export function mountOrderCreateView(container) {
                 layanan: veh.layanan.map((item) => {
                     const tariff = catalog.harga_layanan.find((t) => Number(t.id_harga) === Number(item.id_harga));
                     const hargaDasar = Number(tariff?.harga_dasar ?? 0);
-                    const hargaAkhir = item.harga_akhir === '' || item.harga_akhir === null ? hargaDasar : Number(item.harga_akhir);
+                    const hargaAkhir =
+                        item.harga_akhir === '' || item.harga_akhir === null ? hargaDasar : Number(item.harga_akhir);
                     const entry = {
                         id_harga: Number(item.id_harga),
                         harga_akhir: hargaAkhir,
@@ -465,6 +480,7 @@ export function mountOrderCreateView(container) {
             navigateTo(APP_VIEWS.ORDER_DETAIL, {
                 orderId: Number(createdOrder.id_pesanan),
                 tab: 'detail',
+                replaceUrl: true,
             });
         } catch (err) {
             if (err.status === 409 && err.errorCode === 'HOLIDAY_CONFIRMATION_REQUIRED') {
@@ -473,6 +489,9 @@ export function mountOrderCreateView(container) {
             errorObj = err;
             isSubmitting = false;
             render();
+            if (container.querySelector('[data-inline-error="true"]')) {
+                scrollToElement('[data-inline-error="true"]');
+            }
         }
     }
 
@@ -488,14 +507,14 @@ export function mountOrderCreateView(container) {
         }
 
         vehicles.forEach((veh, vIdx) => {
-            const platEl = container.querySelector(`[data-veh-plat="${vIdx}"]`);
+            const platEl = container.querySelector(`[data-create-plat="${vIdx}"]`);
             if (platEl) {
                 veh.plat_nomor = platEl.value;
             }
 
             veh.layanan.forEach((line, lIdx) => {
-                const priceEl = container.querySelector(`[data-line-price="${vIdx}-${lIdx}"]`);
-                const reasonEl = container.querySelector(`[data-line-reason="${vIdx}-${lIdx}"]`);
+                const priceEl = container.querySelector(`[data-create-price="${vIdx}-${lIdx}"]`);
+                const reasonEl = container.querySelector(`[data-create-reason="${vIdx}-${lIdx}"]`);
                 if (priceEl) {
                     line.harga_akhir = priceEl.value;
                 }
@@ -512,31 +531,28 @@ export function mountOrderCreateView(container) {
         const showOperationalAlert =
             scheduleStatus &&
             (scheduleStatus.status_jam_operasional !== 'dalam_jam' ||
-                scheduleStatus.perlu_konfirmasi_hari_libur ||
-                (scheduleStatus.warnings || []).length > 0);
+                scheduleStatus.perlu_konfirmasi_hari_libur);
         const ownerMode = isOwner();
+        const parsedError = parseOrderValidationError(errorObj, vehicles, catalog);
 
         container.innerHTML = `
             <div class="space-y-5">
                 ${renderPageHeader({
                     backBtnId: 'create-back-btn',
-                    backLabel: '← Kembali ke Antrean',
                     title: 'Buat Pesanan Baru',
                 })}
 
                 ${showOperationalAlert ? `
-                    <div class="wn-card px-4 py-3">
+                    <div class="wn-card flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                         <div class="flex flex-wrap items-center gap-2">
-                            <span class="text-xs font-semibold text-slate-600">Status Operasional:</span>
+                            <span class="text-xs font-semibold text-ink-muted">Operasional:</span>
                             ${badgeOperasional(scheduleStatus.status_jam_operasional)}
                         </div>
-                        ${(scheduleStatus.warnings || []).length > 0 ? `
-                            <p class="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800">${scheduleStatus.warnings.map((w) => escapeHtml(w)).join(' ')}</p>
-                        ` : ''}
+                        ${scheduleStatus.perlu_konfirmasi_hari_libur ? '<span class="text-xs font-medium text-warning">Perlu konfirmasi hari libur sebelum simpan.</span>' : ''}
                     </div>
                 ` : ''}
 
-                ${errorObj && (!isLoadingCatalog && catalog.kategori_kendaraan.length > 0) ? renderErrorAlert(errorObj) : ''}
+                ${parsedError.hasError && !isLoadingCatalog && catalog.kategori_kendaraan.length > 0 ? renderOrderErrorSummary(parsedError) : ''}
 
                 ${holidayConfirmationRequired ? `
                     <div class="rounded-xl border border-amber-300 bg-amber-50 p-4">
@@ -568,19 +584,28 @@ export function mountOrderCreateView(container) {
                             : 'Hubungi Owner untuk mengaktifkan kategori kendaraan, layanan, dan tarif terlebih dahulu.',
                         actionsHtml: ownerMode
                             ? '<button id="create-open-catalog-btn" type="button" class="wn-btn-primary">Buka Katalog & Tarif</button><button id="create-reload-catalog-btn" type="button" class="wn-btn-secondary">Muat Ulang</button>'
-                            : '<button id="create-go-dash-btn" type="button" class="wn-btn-secondary">Kembali ke Dashboard</button><button id="create-reload-catalog-btn" type="button" class="wn-btn-secondary">Muat Ulang</button>',
+                            : '<button id="create-go-dash-btn" type="button" class="wn-btn-secondary">Kembali</button><button id="create-reload-catalog-btn" type="button" class="wn-btn-secondary">Muat Ulang</button>',
                     })}
                 ` : `
-                    <form id="create-order-form" class="grid gap-6 lg:grid-cols-3">
+                    <form id="create-order-form" novalidate class="grid gap-6 lg:grid-cols-3">
                         <div class="min-w-0 space-y-4 lg:col-span-2">
-                            ${vehicles.map((veh, vIdx) => renderVehicleBuilder(veh, vIdx)).join('')}
+                            ${vehicles.map((veh, vIdx) => renderVehicleServiceCard({
+                                veh,
+                                vIdx,
+                                totalVehicles: vehicles.length,
+                                categories: catalog.kategori_kendaraan,
+                                availableTariffs: tariffsForCategory(veh.id_kategori_kendaraan),
+                                expandedLines: expandedPriceLines,
+                                parsedError,
+                                prefix: 'create',
+                            })).join('')}
 
                             <button
                                 id="add-vehicle-btn"
                                 type="button"
                                 class="flex min-h-[44px] w-full items-center justify-center rounded-2xl border-2 border-dashed border-border-subtle bg-surface px-4 py-3 text-sm font-semibold text-accent transition active:scale-[0.99] hover:border-accent hover:bg-accent-soft/40"
                             >
-                                + Tambah Kendaraan Lain dalam Pesanan Ini
+                                + Tambah Kendaraan
                             </button>
 
                             <div class="wn-card p-4 shadow-xs sm:p-5">
@@ -588,13 +613,14 @@ export function mountOrderCreateView(container) {
                                 <textarea
                                     id="create-order-catatan"
                                     rows="2"
-                                    placeholder="Contoh: Pelanggan menunggu di ruang tunggu, hindari semprot bagian kelistrikan"
-                                    class="wn-textarea"
+                                    placeholder="Contoh: Pelanggan menunggu di ruang tunggu"
+                                    class="wn-textarea ${parsedError.topErrors?.catatan ? 'wn-textarea-error' : ''}"
                                 >${escapeHtml(catatan)}</textarea>
+                                ${parsedError.topErrors?.catatan ? `<p class="wn-error-inline" data-inline-error="true">${escapeHtml(parsedError.topErrors.catatan)}</p>` : ''}
                             </div>
                         </div>
 
-                        <div class="space-y-4">
+                        <div class="min-w-0 space-y-4">
                             <div data-motion-card class="wn-card p-5 lg:sticky lg:top-6">
                                 <h2 class="text-base font-bold text-ink">Ringkasan Pesanan</h2>
                                 <dl class="mt-4 space-y-2.5 border-b border-border-subtle pb-4 text-sm">
@@ -603,11 +629,11 @@ export function mountOrderCreateView(container) {
                                         <dd class="font-semibold text-ink tabular-nums">${vehicles.length}</dd>
                                     </div>
                                     <div class="flex justify-between text-ink-muted">
-                                        <dt>Subtotal Layanan Utama</dt>
+                                        <dt>Layanan Utama</dt>
                                         <dd class="font-semibold text-ink tabular-nums">${escapeHtml(formatRupiah(preview.subtotalUtama))}</dd>
                                     </div>
                                     <div class="flex justify-between text-ink-muted">
-                                        <dt>Subtotal Layanan Tambahan</dt>
+                                        <dt>Layanan Tambahan</dt>
                                         <dd class="font-semibold text-ink tabular-nums">${escapeHtml(formatRupiah(preview.subtotalTambahan))}</dd>
                                     </div>
                                 </dl>
@@ -616,9 +642,15 @@ export function mountOrderCreateView(container) {
                                     <span class="text-xl font-bold text-brand-navy tabular-nums">${escapeHtml(formatRupiah(preview.total))}</span>
                                 </div>
 
-                                <p class="mt-3 rounded-lg bg-app-bg px-3 py-2 text-xs text-ink-muted">
-                                    Pesanan baru tercatat berstatus <strong>Belum Dibayar</strong>; pelunasan dilakukan di halaman Detail Pesanan.
-                                </p>
+                                ${parsedError.hasError ? `
+                                    <p class="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-danger">
+                                        Terdapat kesalahan input. Periksa kolom bertanda merah sebelum menyimpan.
+                                    </p>
+                                ` : `
+                                    <p class="mt-3 rounded-lg bg-app-bg px-3 py-2 text-xs text-ink-muted">
+                                        Pembayaran dicatat di halaman Detail Pesanan.
+                                    </p>
+                                `}
 
                                 ${scheduleStatus?.perlu_konfirmasi_hari_libur ? `
                                     <label class="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
@@ -652,128 +684,20 @@ export function mountOrderCreateView(container) {
         }
     }
 
-    function renderVehicleBuilder(veh, vIdx) {
-        const availableTariffs = tariffsForCategory(veh.id_kategori_kendaraan);
-        const mainTariffs = availableTariffs.filter((t) => (t.layanan?.tipe_layanan || 'utama') === 'utama');
-        const addOnTariffs = availableTariffs.filter((t) => t.layanan?.tipe_layanan === 'tambahan');
-
-        return `
-            <div data-motion-card class="wn-card p-4 shadow-xs sm:p-5">
-                <div class="flex items-center justify-between border-b border-border-subtle pb-3">
-                    <h3 class="text-sm font-bold text-ink">Kendaraan #${vIdx + 1}</h3>
-                    ${vehicles.length > 1 ? `
-                        <button type="button" data-remove-veh="${vIdx}" class="inline-flex min-h-[32px] items-center rounded-md px-2 text-xs font-semibold text-danger hover:bg-red-50">Hapus Kendaraan</button>
-                    ` : ''}
-                </div>
-
-                <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label class="wn-label">Kategori Kendaraan <span class="text-danger">*</span></label>
-                        <select data-veh-cat="${vIdx}" class="wn-select">
-                            ${catalog.kategori_kendaraan.map((kat) => `
-                                <option value="${kat.id_kategori_kendaraan}" ${Number(kat.id_kategori_kendaraan) === Number(veh.id_kategori_kendaraan) ? 'selected' : ''}>
-                                    ${escapeHtml(kat.nama_kategori)} (${escapeHtml(kat.jenis_kendaraan)})
-                                </option>
-                            `).join('')}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="wn-label">Plat Nomor <span class="font-normal text-ink-muted">(Opsional)</span></label>
-                        <input
-                            type="text"
-                            maxlength="20"
-                            data-veh-plat="${vIdx}"
-                            value="${escapeHtml(veh.plat_nomor)}"
-                            placeholder="Mis. B 1234 XYZ"
-                            class="wn-input uppercase"
-                        />
-                    </div>
-                </div>
-
-                <div class="mt-4 space-y-3">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <span class="text-xs font-semibold uppercase tracking-wide text-ink-muted">Layanan Utama & Tambahan</span>
-                        <button
-                            type="button"
-                            data-add-service="${vIdx}"
-                            ${availableTariffs.length === 0 ? 'disabled' : ''}
-                            class="inline-flex min-h-[34px] items-center rounded-lg border border-accent-border bg-accent-soft px-3 py-1 text-xs font-semibold text-accent transition active:scale-[0.98] hover:bg-teal-100/70 disabled:opacity-50"
-                        >
-                            + Tambah Layanan
-                        </button>
-                    </div>
-
-                    ${availableTariffs.length === 0 ? `
-                        <p class="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Belum ada tarif aktif untuk kategori kendaraan ini.</p>
-                    ` : veh.layanan.map((line, lIdx) => {
-                        const tariff = availableTariffs.find((t) => Number(t.id_harga) === Number(line.id_harga)) || availableTariffs[0];
-                        const basePrice = Number(tariff?.harga_dasar ?? 0);
-                        const minPrice = Number(tariff?.batas_bawah ?? 0);
-                        const maxPrice = Number(tariff?.batas_atas ?? 0);
-                        const activePrice = line.harga_akhir === '' || line.harga_akhir === null ? basePrice : Number(line.harga_akhir);
-                        const isAdjusted = Math.abs(activePrice - basePrice) > 0.001;
-
-                        return `
-                            <div class="rounded-xl border border-border-subtle bg-app-bg/75 p-3.5">
-                                <div class="grid gap-3 md:grid-cols-12">
-                                    <div class="md:col-span-6">
-                                        <label class="wn-label">Pilih Layanan <span class="text-danger">*</span></label>
-                                        <select data-line-tariff="${vIdx}-${lIdx}" class="wn-select">
-                                            ${mainTariffs.length > 0 ? `<optgroup label="Layanan Utama">${mainTariffs.map((t) => `
-                                                <option value="${t.id_harga}" ${Number(t.id_harga) === Number(line.id_harga) ? 'selected' : ''}>
-                                                    [Utama] ${escapeHtml(t.layanan?.nama_layanan)} — ${escapeHtml(formatRupiah(t.harga_dasar))}
-                                                </option>
-                                            `).join('')}</optgroup>` : ''}
-                                            ${addOnTariffs.length > 0 ? `<optgroup label="Layanan Tambahan (Add-On)">${addOnTariffs.map((t) => `
-                                                <option value="${t.id_harga}" ${Number(t.id_harga) === Number(line.id_harga) ? 'selected' : ''}>
-                                                    [Tambahan] ${escapeHtml(t.layanan?.nama_layanan)} — ${escapeHtml(formatRupiah(t.harga_dasar))}
-                                                </option>
-                                            `).join('')}</optgroup>` : ''}
-                                        </select>
-                                    </div>
-
-                                    <div class="md:col-span-5">
-                                        <label class="wn-label">
-                                            Harga Akhir <span class="text-danger">*</span> <span class="font-normal text-ink-muted">(${escapeHtml(formatRupiah(minPrice))} – ${escapeHtml(formatRupiah(maxPrice))})</span>
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="1"
-                                            data-line-price="${vIdx}-${lIdx}"
-                                            value="${escapeHtml(line.harga_akhir)}"
-                                            class="wn-input tabular-nums"
-                                        />
-                                    </div>
-
-                                    <div class="flex items-end justify-end md:col-span-1">
-                                        ${veh.layanan.length > 1 ? `
-                                            <button type="button" data-remove-service="${vIdx}-${lIdx}" class="min-h-[36px] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-danger hover:bg-red-50">Hapus</button>
-                                        ` : ''}
-                                    </div>
-                                </div>
-
-                                <div class="mt-2.5">
-                                    <input
-                                        type="text"
-                                        data-line-reason="${vIdx}-${lIdx}"
-                                        value="${escapeHtml(line.alasan_penyesuaian)}"
-                                        placeholder="${isAdjusted ? 'Wajib diisi karena harga berbeda dari harga dasar' : 'Alasan penyesuaian (jika harga diubah)'}"
-                                        class="block min-h-[36px] w-full rounded-lg border ${isAdjusted ? 'border-amber-400 bg-amber-50/70' : 'border-border-subtle bg-surface'} px-3 py-1.5 text-xs text-ink focus:border-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-navy/15"
-                                    />
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
-        `;
+    function addServiceByTariffId(vIdx, idHarga) {
+        const tariff = tariffsForCategory(vehicles[vIdx].id_kategori_kendaraan).find(
+            (t) => Number(t.id_harga) === Number(idHarga)
+        );
+        if (!tariff) {
+            return;
+        }
+        vehicles[vIdx].layanan.push(makeServiceLineFromTariff(tariff));
     }
 
     function bindCreateEvents() {
-        container.querySelector('#create-back-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.DASHBOARD));
-        container.querySelector('#create-cancel-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.DASHBOARD));
-        container.querySelector('#create-go-dash-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.DASHBOARD));
+        container.querySelector('#create-back-btn')?.addEventListener('click', () => navigateBack(APP_VIEWS.DASHBOARD));
+        container.querySelector('#create-cancel-btn')?.addEventListener('click', () => navigateBack(APP_VIEWS.DASHBOARD));
+        container.querySelector('#create-go-dash-btn')?.addEventListener('click', () => navigateBack(APP_VIEWS.DASHBOARD));
         container.querySelector('#create-open-catalog-btn')?.addEventListener('click', () => navigateTo(APP_VIEWS.OWNER_CATALOG));
         container.querySelector('#create-reload-catalog-btn')?.addEventListener('click', () => loadInitialData());
 
@@ -783,71 +707,72 @@ export function mountOrderCreateView(container) {
             render();
         });
 
-        container.querySelectorAll('[data-remove-veh]').forEach((btn) => {
+        container.querySelectorAll('[data-create-remove-veh]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 syncInputsFromDom();
-                const idx = Number(btn.getAttribute('data-remove-veh'));
+                const idx = Number(btn.getAttribute('data-create-remove-veh'));
                 vehicles.splice(idx, 1);
                 render();
             });
         });
 
-        container.querySelectorAll('[data-veh-cat]').forEach((select) => {
+        container.querySelectorAll('[data-create-cat]').forEach((select) => {
             select.addEventListener('change', () => {
                 syncInputsFromDom();
-                const vIdx = Number(select.getAttribute('data-veh-cat'));
+                const vIdx = Number(select.getAttribute('data-create-cat'));
                 const nextKat = Number(select.value);
                 const matching = tariffsForCategory(nextKat);
+                const firstMain = matching.find((t) => (t.layanan?.tipe_layanan || 'utama') === 'utama') || matching[0];
                 vehicles[vIdx].id_kategori_kendaraan = nextKat;
-                vehicles[vIdx].layanan = matching[0]
-                    ? [{ id_harga: Number(matching[0].id_harga), harga_akhir: Number(matching[0].harga_dasar), alasan_penyesuaian: '' }]
-                    : [];
+                vehicles[vIdx].layanan = firstMain ? [makeServiceLineFromTariff(firstMain)] : [];
                 render();
             });
         });
 
-        container.querySelectorAll('[data-add-service]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                syncInputsFromDom();
-                const vIdx = Number(btn.getAttribute('data-add-service'));
-                const matching = tariffsForCategory(vehicles[vIdx].id_kategori_kendaraan);
-                if (matching.length > 0) {
-                    const unused = matching.find(
-                        (m) => !vehicles[vIdx].layanan.some((l) => Number(l.id_harga) === Number(m.id_harga))
-                    ) || matching[0];
-                    vehicles[vIdx].layanan.push({
-                        id_harga: Number(unused.id_harga),
-                        harga_akhir: Number(unused.harga_dasar),
-                        alasan_penyesuaian: '',
-                    });
-                    render();
-                }
-            });
-        });
-
-        container.querySelectorAll('[data-remove-service]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                syncInputsFromDom();
-                const [vIdx, lIdx] = btn.getAttribute('data-remove-service').split('-').map(Number);
-                vehicles[vIdx].layanan.splice(lIdx, 1);
-                render();
-            });
-        });
-
-        container.querySelectorAll('[data-line-tariff]').forEach((select) => {
+        container.querySelectorAll('[data-create-pick-main], [data-create-pick-addon]').forEach((select) => {
             select.addEventListener('change', () => {
+                const chosen = Number(select.value);
+                if (!chosen) {
+                    return;
+                }
+                const vIdx = Number(select.getAttribute('data-create-pick-main') ?? select.getAttribute('data-create-pick-addon'));
                 syncInputsFromDom();
-                const [vIdx, lIdx] = select.getAttribute('data-line-tariff').split('-').map(Number);
-                const nextHargaId = Number(select.value);
-                const tariff = catalog.harga_layanan.find((t) => Number(t.id_harga) === nextHargaId);
-                vehicles[vIdx].layanan[lIdx].id_harga = nextHargaId;
-                vehicles[vIdx].layanan[lIdx].harga_akhir = tariff ? Number(tariff.harga_dasar) : '';
-                vehicles[vIdx].layanan[lIdx].alasan_penyesuaian = '';
+                addServiceByTariffId(vIdx, chosen);
                 render();
             });
         });
 
-        container.querySelectorAll('[data-line-price]').forEach((input) => {
+        container.querySelectorAll('[data-create-toggle-price]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                syncInputsFromDom();
+                const [vIdx, lIdx] = btn.getAttribute('data-create-toggle-price').split('-').map(Number);
+                const line = vehicles[vIdx]?.layanan?.[lIdx];
+                if (!line) {
+                    return;
+                }
+                const uid = ensureLineUid(line);
+                if (expandedPriceLines.has(uid)) {
+                    expandedPriceLines.delete(uid);
+                } else {
+                    expandedPriceLines.add(uid);
+                }
+                render();
+            });
+        });
+
+        container.querySelectorAll('[data-create-remove-service]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                syncInputsFromDom();
+                const [vIdx, lIdx] = btn.getAttribute('data-create-remove-service').split('-').map(Number);
+                const removed = vehicles[vIdx].layanan.splice(lIdx, 1)[0];
+                if (removed?._uid) {
+                    expandedPriceLines.delete(removed._uid);
+                }
+                render();
+            });
+        });
+
+        container.querySelectorAll('[data-create-price]').forEach((input) => {
             input.addEventListener('change', () => {
                 syncInputsFromDom();
                 render();
