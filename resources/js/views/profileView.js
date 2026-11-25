@@ -1,4 +1,4 @@
-import { washnoteApi } from '../api/client.js';
+import { isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion } from '../motion/motionSystem.js';
 import { APP_VIEWS, isOwner, navigateTo, resetSession, state } from '../state/store.js';
 import {
@@ -12,33 +12,56 @@ import {
 
 export function mountProfileView(container, onSessionEnded) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let isSubmitting = false;
     let errorObj = null;
     let profile = state.user;
 
     async function refreshProfile() {
+        let wasAborted = false;
         try {
-            const res = await washnoteApi.getProfile();
+            const res = await washnoteApi.getProfile({ signal: abortController.signal });
+            if (isDisposed) {
+                return;
+            }
             if (res?.data) {
                 profile = res.data;
                 state.user = res.data;
             }
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
     async function handleLogout() {
+        if (isDisposed || isSubmitting) {
+            return;
+        }
+        isSubmitting = true;
+        render();
         try {
-            await washnoteApi.logout();
-        } catch {
+            await washnoteApi.logout({ signal: abortController.signal });
+        } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                return;
+            }
             // Proceed clearing local token even if session already expired
         } finally {
-            resetSession('Anda telah keluar dari sesi.');
-            onSessionEnded();
+            isSubmitting = false;
+            if (!isDisposed) {
+                resetSession('Anda telah keluar dari sesi.');
+                onSessionEnded();
+            }
         }
     }
 
@@ -54,8 +77,9 @@ export function mountProfileView(container, onSessionEnded) {
                     <button
                         type="button"
                         data-toggle-pass="${id}"
+                        aria-pressed="false"
                         aria-label="Tampilkan kata sandi"
-                        class="absolute inset-y-0 right-1 flex min-w-[36px] items-center justify-center text-ink-muted hover:text-ink"
+                        class="absolute inset-y-0 right-0.5 flex min-h-[44px] min-w-[44px] sm:min-h-[38px] sm:min-w-[38px] items-center justify-center text-ink-muted hover:text-ink"
                     >
                         ${iconSvg('eye', 'h-4 w-4')}
                     </button>
@@ -65,6 +89,9 @@ export function mountProfileView(container, onSessionEnded) {
     }
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         const ownerMode = isOwner();
 
         container.innerHTML = `
@@ -194,8 +221,11 @@ export function mountProfileView(container, onSessionEnded) {
                     return;
                 }
                 const nextType = input.type === 'password' ? 'text' : 'password';
+                const isRevealed = nextType === 'text';
                 input.type = nextType;
-                btn.innerHTML = iconSvg(nextType === 'text' ? 'eyeOff' : 'eye', 'h-4 w-4');
+                btn.setAttribute('aria-pressed', isRevealed ? 'true' : 'false');
+                btn.setAttribute('aria-label', isRevealed ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi');
+                btn.innerHTML = iconSvg(isRevealed ? 'eyeOff' : 'eye', 'h-4 w-4');
             });
         });
 
@@ -203,6 +233,9 @@ export function mountProfileView(container, onSessionEnded) {
 
         container.querySelector('#change-pass-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const payload = {
                 current_password: container.querySelector('#prof-cur-pass')?.value || '',
                 new_password: container.querySelector('#prof-new-pass')?.value || '',
@@ -213,10 +246,16 @@ export function mountProfileView(container, onSessionEnded) {
             render();
 
             try {
-                await washnoteApi.changePassword(payload);
+                await washnoteApi.changePassword(payload, { signal: abortController.signal });
+                if (isDisposed) {
+                    return;
+                }
                 resetSession('Kata sandi berhasil diperbarui. Silakan masuk kembali dengan kata sandi baru.');
                 onSessionEnded();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -225,4 +264,9 @@ export function mountProfileView(container, onSessionEnded) {
     }
 
     refreshProfile();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }

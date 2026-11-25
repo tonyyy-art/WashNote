@@ -1,4 +1,5 @@
 import { clearAuthSession, getStoredToken, getStoredUser, saveAuthSession } from '../api/client.js';
+import { cleanupToastMotion } from '../motion/motionSystem.js';
 
 export const APP_VIEWS = {
     DASHBOARD: 'dashboard',
@@ -82,7 +83,7 @@ export function resolveViewFromPath(pathname, search = typeof window !== 'undefi
         }
     }
 
-    return { view: APP_VIEWS.DASHBOARD, options: {} };
+    return { view: APP_VIEWS.DASHBOARD, options: clean !== '/' ? { unknownRoute: clean } : {} };
 }
 
 function buildPathForView(view, orderId = null) {
@@ -128,6 +129,7 @@ export const state = {
 
 let onStateChange = () => {};
 let onToastChange = () => {};
+let toastTimerId = null;
 
 export function subscribeStateChange(callback) {
     onStateChange = callback;
@@ -158,6 +160,13 @@ export function setAuthenticatedSession(token, user) {
 
 export function resetSession(notice = null) {
     clearAuthSession();
+    if (toastTimerId !== null) {
+        window.clearTimeout(toastTimerId);
+        toastTimerId = null;
+    }
+    cleanupToastMotion();
+    state.toast = null;
+    notifyToastRender();
     state.token = null;
     state.user = null;
     state.selectedOrderId = null;
@@ -168,6 +177,11 @@ export function resetSession(notice = null) {
 }
 
 export function showToast(message, type = 'success') {
+    if (toastTimerId !== null) {
+        window.clearTimeout(toastTimerId);
+        toastTimerId = null;
+    }
+
     state.toast = {
         id: Date.now(),
         message,
@@ -176,7 +190,8 @@ export function showToast(message, type = 'success') {
     notifyToastRender();
 
     const currentId = state.toast.id;
-    window.setTimeout(() => {
+    toastTimerId = window.setTimeout(() => {
+        toastTimerId = null;
         if (state.toast?.id === currentId) {
             state.toast = null;
             notifyToastRender();
@@ -192,6 +207,10 @@ export function navigateTo(view, options = {}) {
         syncBrowserUrl(APP_VIEWS.DASHBOARD, null, true, 0);
         notifyRender();
         return;
+    }
+
+    if (options.unknownRoute) {
+        showToast('Halaman tidak ditemukan, dialihkan ke Beranda.', 'info');
     }
 
     const prevView = state.activeView;

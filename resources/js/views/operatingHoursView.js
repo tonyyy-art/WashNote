@@ -1,4 +1,4 @@
-import { washnoteApi } from '../api/client.js';
+import { isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
 import { APP_VIEWS, isOwner, navigateBack, showToast } from '../state/store.js';
 import {
@@ -18,6 +18,8 @@ const DAYS = ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu'];
 
 export function mountOperatingHoursView(container) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let isLoading = true;
     let isSubmitting = false;
     let errorObj = null;
@@ -34,12 +36,17 @@ export function mountOperatingHoursView(container) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
             const [hoursRes, statusRes, excRes] = await Promise.all([
-                washnoteApi.getOperatingHours(),
-                washnoteApi.getOperatingStatus(),
-                washnoteApi.getOperatingExceptions(),
+                washnoteApi.getOperatingHours({ signal: abortController.signal }),
+                washnoteApi.getOperatingStatus({ signal: abortController.signal }),
+                washnoteApi.getOperatingExceptions({}, { signal: abortController.signal }),
             ]);
+
+            if (isDisposed) {
+                return;
+            }
 
             weeklyList = hoursRes?.data || [];
             configComplete = Boolean(hoursRes?.konfigurasi_lengkap);
@@ -47,15 +54,24 @@ export function mountOperatingHoursView(container) {
             statusData = statusRes?.data || null;
             exceptionsList = excRes?.data || [];
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isLoading = false;
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         const ownerMode = isOwner();
         const configuredDays = new Set(weeklyList.map((item) => item.hari));
         const unconfiguredDays = DAYS.filter((day) => !configuredDays.has(day));
@@ -113,8 +129,8 @@ export function mountOperatingHoursView(container) {
                                             </div>
                                             ${ownerMode ? `
                                                 <div class="flex flex-wrap gap-2">
-                                                    <button type="button" data-edit-weekly="${row.id_jam_operasional}" class="wn-link inline-flex min-h-[32px] items-center rounded-md px-2 text-xs hover:bg-accent-soft">Ubah</button>
-                                                    <button type="button" data-del-weekly="${row.id_jam_operasional}" class="inline-flex min-h-[32px] items-center rounded-md px-2 text-xs font-semibold text-danger hover:bg-red-50">Hapus</button>
+                                                    <button type="button" data-edit-weekly="${row.id_jam_operasional}" class="wn-link inline-flex min-h-[40px] sm:min-h-[32px] items-center rounded-md px-2 text-xs hover:bg-accent-soft">Ubah</button>
+                                                    <button type="button" data-del-weekly="${row.id_jam_operasional}" ${isSubmitting ? 'disabled' : ''} class="inline-flex min-h-[40px] sm:min-h-[32px] items-center rounded-md px-2 text-xs font-semibold text-danger hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-55">Hapus</button>
                                                 </div>
                                             ` : ''}
                                         </div>
@@ -129,11 +145,14 @@ export function mountOperatingHoursView(container) {
                                         ${editingWeekly ? `<button type="button" id="cancel-edit-weekly" class="text-xs font-medium text-ink-muted hover:text-ink">Batal Edit</button>` : ''}
                                     </div>
                                     ${!editingWeekly ? `
-                                        <select id="weekly-hari" required class="wn-select capitalize">
-                                            ${unconfiguredDays.length > 0 ? unconfiguredDays.map((d) => `<option value="${d}">${escapeHtml(d)}</option>`).join('') : '<option value="" disabled selected>Semua 7 hari sudah terkonfigurasi</option>'}
-                                        </select>
+                                        <div>
+                                            <label for="weekly-hari" class="wn-label">Hari</label>
+                                            <select id="weekly-hari" required class="wn-select capitalize">
+                                                ${unconfiguredDays.length > 0 ? unconfiguredDays.map((d) => `<option value="${d}">${escapeHtml(d)}</option>`).join('') : '<option value="" disabled selected>Semua 7 hari sudah terkonfigurasi</option>'}
+                                            </select>
+                                        </div>
                                     ` : ''}
-                                    <label class="flex items-center gap-2 text-sm text-ink">
+                                    <label for="weekly-open" class="flex min-h-[40px] sm:min-h-[32px] items-center gap-2 text-sm text-ink">
                                         <input id="weekly-open" type="checkbox" ${(editingWeekly ? editingWeekly.status_buka : true) ? 'checked' : ''} class="wn-checkbox" />
                                         <span>Buka pada hari ini</span>
                                     </label>
@@ -177,8 +196,8 @@ export function mountOperatingHoursView(container) {
                                             </div>
                                             ${ownerMode ? `
                                                 <div class="flex flex-wrap gap-2 shrink-0">
-                                                    <button type="button" data-edit-exc="${exc.id_pengecualian}" class="wn-link inline-flex min-h-[32px] items-center rounded-md px-2 text-xs hover:bg-accent-soft">Ubah</button>
-                                                    <button type="button" data-del-exc="${exc.id_pengecualian}" class="inline-flex min-h-[32px] items-center rounded-md px-2 text-xs font-semibold text-danger hover:bg-red-50">Hapus</button>
+                                                    <button type="button" data-edit-exc="${exc.id_pengecualian}" class="wn-link inline-flex min-h-[40px] sm:min-h-[32px] items-center rounded-md px-2 text-xs hover:bg-accent-soft">Ubah</button>
+                                                    <button type="button" data-del-exc="${exc.id_pengecualian}" ${isSubmitting ? 'disabled' : ''} class="inline-flex min-h-[40px] sm:min-h-[32px] items-center rounded-md px-2 text-xs font-semibold text-danger hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-55">Hapus</button>
                                                 </div>
                                             ` : ''}
                                         </div>
@@ -260,12 +279,27 @@ export function mountOperatingHoursView(container) {
 
         container.querySelectorAll('[data-del-weekly]').forEach((btn) => {
             btn.addEventListener('click', async () => {
+                if (isDisposed || isSubmitting) {
+                    return;
+                }
+                isSubmitting = true;
+                errorObj = null;
+                render();
+
                 try {
-                    await washnoteApi.deleteOperatingHour(Number(btn.getAttribute('data-del-weekly')));
+                    await washnoteApi.deleteOperatingHour(Number(btn.getAttribute('data-del-weekly')), { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
+                    isSubmitting = false;
                     showToast('Jadwal mingguan dihapus.', 'success');
                     editingWeeklyId = null;
                     await loadAll();
                 } catch (err) {
+                    if (isDisposed || isAbortError(err)) {
+                        return;
+                    }
+                    isSubmitting = false;
                     errorObj = err;
                     render();
                 }
@@ -274,6 +308,9 @@ export function mountOperatingHoursView(container) {
 
         container.querySelector('#weekly-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const isOpen = Boolean(container.querySelector('#weekly-open')?.checked);
             const jamBuka = container.querySelector('#weekly-start')?.value || null;
             const jamTutup = container.querySelector('#weekly-end')?.value || null;
@@ -289,7 +326,10 @@ export function mountOperatingHoursView(container) {
                         status_buka: isOpen,
                         jam_buka: isOpen ? jamBuka : null,
                         jam_tutup: isOpen ? jamTutup : null,
-                    });
+                    }, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Jadwal operasional diperbarui.', 'success');
                     editingWeeklyId = null;
                 } else {
@@ -298,12 +338,18 @@ export function mountOperatingHoursView(container) {
                         status_buka: isOpen,
                         jam_buka: isOpen ? jamBuka : null,
                         jam_tutup: isOpen ? jamTutup : null,
-                    });
+                    }, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Jadwal operasional ditambahkan.', 'success');
                 }
                 isSubmitting = false;
                 await loadAll();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -320,12 +366,27 @@ export function mountOperatingHoursView(container) {
 
         container.querySelectorAll('[data-del-exc]').forEach((btn) => {
             btn.addEventListener('click', async () => {
+                if (isDisposed || isSubmitting) {
+                    return;
+                }
+                isSubmitting = true;
+                errorObj = null;
+                render();
+
                 try {
-                    await washnoteApi.deleteOperatingException(Number(btn.getAttribute('data-del-exc')));
+                    await washnoteApi.deleteOperatingException(Number(btn.getAttribute('data-del-exc')), { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
+                    isSubmitting = false;
                     showToast('Pengecualian jam operasional dihapus.', 'success');
                     editingExceptionId = null;
                     await loadAll();
                 } catch (err) {
+                    if (isDisposed || isAbortError(err)) {
+                        return;
+                    }
+                    isSubmitting = false;
                     errorObj = err;
                     render();
                 }
@@ -334,6 +395,9 @@ export function mountOperatingHoursView(container) {
 
         container.querySelector('#exc-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const tanggal = container.querySelector('#exc-date')?.value;
             const jenis = container.querySelector('#exc-type')?.value;
             const jamBuka = container.querySelector('#exc-start')?.value || null;
@@ -354,16 +418,25 @@ export function mountOperatingHoursView(container) {
 
             try {
                 if (editingExceptionId) {
-                    await washnoteApi.updateOperatingException(editingExceptionId, payload);
+                    await washnoteApi.updateOperatingException(editingExceptionId, payload, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Pengecualian diperbarui.', 'success');
                     editingExceptionId = null;
                 } else {
-                    await washnoteApi.createOperatingException(payload);
+                    await washnoteApi.createOperatingException(payload, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Pengecualian ditambahkan.', 'success');
                 }
                 isSubmitting = false;
                 await loadAll();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -372,4 +445,9 @@ export function mountOperatingHoursView(container) {
     }
 
     loadAll();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }

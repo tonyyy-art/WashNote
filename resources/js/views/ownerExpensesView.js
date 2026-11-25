@@ -1,4 +1,4 @@
-import { generateIdempotencyKey, washnoteApi } from '../api/client.js';
+import { generateIdempotencyKey, isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
 import { APP_VIEWS, navigateBack, navigateTo, showToast } from '../state/store.js';
 import {
@@ -17,6 +17,8 @@ import {
 
 export function mountOwnerExpensesView(container) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let isLoading = true;
     let isSubmitting = false;
     let errorObj = null;
@@ -35,20 +37,31 @@ export function mountOwnerExpensesView(container) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
             const [expCatRes, expRes] = await Promise.all([
-                washnoteApi.getExpenseCategories(),
-                washnoteApi.getExpenses({ page: currentExpPage }),
+                washnoteApi.getExpenseCategories({ signal: abortController.signal }),
+                washnoteApi.getExpenses({ page: currentExpPage }, { signal: abortController.signal }),
             ]);
+
+            if (isDisposed) {
+                return;
+            }
 
             expenseCategories = expCatRes?.data || [];
             expensesPage = expRes?.data || null;
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isLoading = false;
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
@@ -71,19 +84,19 @@ export function mountOwnerExpensesView(container) {
             <div class="grid gap-6 lg:grid-cols-3">
                 <div data-motion-card class="wn-card min-w-0 overflow-hidden lg:col-span-2">
                     <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle px-4 py-3">
-                        <div class="inline-flex flex-wrap gap-1 rounded-lg bg-app-bg p-1 text-xs font-semibold">
+                        <div role="group" aria-label="Filter status pengeluaran" class="inline-flex flex-wrap gap-1 rounded-lg bg-app-bg p-1 text-xs font-semibold">
                             ${[
                                 ['all', `Semua (${allRows.length})`],
                                 ['aktif', `Aktif (${allRows.filter((r) => r.status_pengeluaran !== 'dibatalkan').length})`],
                                 ['dibatalkan', `Dibatalkan (${allRows.filter((r) => r.status_pengeluaran === 'dibatalkan').length})`],
                             ].map(([st, label]) => `
-                                <button type="button" data-exp-status="${st}" class="min-h-[32px] rounded-md px-3 py-1 transition ${expenseStatusFilter === st ? 'bg-surface text-ink shadow-xs' : 'text-ink-muted hover:text-ink'}">
+                                <button type="button" data-exp-status="${st}" aria-pressed="${expenseStatusFilter === st ? 'true' : 'false'}" class="min-h-[40px] sm:min-h-[32px] rounded-md px-3 py-1 transition ${expenseStatusFilter === st ? 'bg-surface text-ink shadow-xs' : 'text-ink-muted hover:text-ink'}">
                                     ${escapeHtml(label)}
                                 </button>
                             `).join('')}
                         </div>
                         ${activeCategories.length > 0 && !cancelling ? `
-                            <button id="exp-jump-form-btn" type="button" class="wn-btn-primary min-h-[34px] px-3 py-1.5 text-xs lg:hidden">+ Catat</button>
+                            <button id="exp-jump-form-btn" type="button" class="wn-btn-primary min-h-[40px] sm:min-h-[34px] px-3 py-1.5 text-xs lg:hidden">+ Catat</button>
                         ` : ''}
                     </div>
                     ${allRows.length === 0 ? `
@@ -120,8 +133,8 @@ export function mountOwnerExpensesView(container) {
                                             ${isVoid ? '<span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-danger ring-1 ring-inset ring-red-600/20">Dibatalkan</span>' : badgeStatusAktif(true)}
                                             ${!isVoid ? `
                                                 <div class="flex flex-wrap gap-2">
-                                                    <button type="button" data-edit-exp="${exp.id_pengeluaran}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
-                                                    <button type="button" data-cancel-exp="${exp.id_pengeluaran}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Batalkan</button>
+                                                    <button type="button" data-edit-exp="${exp.id_pengeluaran}" class="wn-link inline-flex min-h-[40px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
+                                                    <button type="button" data-cancel-exp="${exp.id_pengeluaran}" class="inline-flex min-h-[40px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Batalkan</button>
                                                 </div>
                                             ` : ''}
                                         </div>
@@ -315,6 +328,9 @@ export function mountOwnerExpensesView(container) {
 
         container.querySelector('#exp-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const payload = {
                 id_kategori_pengeluaran: Number(container.querySelector('#exp-cat')?.value),
                 tanggal_pengeluaran: container.querySelector('#exp-date')?.value,
@@ -329,17 +345,26 @@ export function mountOwnerExpensesView(container) {
             render();
             try {
                 if (editingExpId) {
-                    await washnoteApi.updateExpense(editingExpId, payload);
+                    await washnoteApi.updateExpense(editingExpId, payload, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Pengeluaran diperbarui.', 'success');
                     editingExpId = null;
                 } else {
-                    await washnoteApi.createExpense(payload, expIdempotencyKey);
+                    await washnoteApi.createExpense(payload, expIdempotencyKey, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     expIdempotencyKey = generateIdempotencyKey();
                     showToast('Pengeluaran berhasil dicatat.', 'success');
                 }
                 isSubmitting = false;
                 await loadExpenses();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -348,17 +373,26 @@ export function mountOwnerExpensesView(container) {
 
         container.querySelector('#exp-cancel-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const alasan = container.querySelector('#exp-cancel-reason')?.value?.trim() || '';
             isSubmitting = true;
             errorObj = null;
             render();
             try {
-                await washnoteApi.cancelExpense(cancellingExpId, { alasan });
+                await washnoteApi.cancelExpense(cancellingExpId, { alasan }, { signal: abortController.signal });
+                if (isDisposed) {
+                    return;
+                }
                 showToast('Pengeluaran berhasil dibatalkan.', 'success');
                 cancellingExpId = null;
                 isSubmitting = false;
                 await loadExpenses();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -377,4 +411,9 @@ export function mountOwnerExpensesView(container) {
     }
 
     loadExpenses();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }

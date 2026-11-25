@@ -1,4 +1,4 @@
-import { washnoteApi } from '../api/client.js';
+import { isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
 import { APP_VIEWS, navigateBack, showToast } from '../state/store.js';
 import {
@@ -12,6 +12,8 @@ import {
 
 export function mountOwnerExpenseCategoriesView(container) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let isLoading = true;
     let isSubmitting = false;
     let errorObj = null;
@@ -23,19 +25,32 @@ export function mountOwnerExpenseCategoriesView(container) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
-            const res = await washnoteApi.getExpenseCategories();
+            const res = await washnoteApi.getExpenseCategories({ signal: abortController.signal });
+            if (isDisposed) {
+                return;
+            }
             expenseCategories = res?.data || [];
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isLoading = false;
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         const editing = editingExpCatId
             ? expenseCategories.find((c) => Number(c.id_kategori_pengeluaran) === Number(editingExpCatId))
             : null;
@@ -76,8 +91,8 @@ export function mountOwnerExpenseCategoriesView(container) {
                                                 ${badgeStatusAktif(Boolean(c.status_aktif))}
                                             </div>
                                             <div class="flex flex-wrap gap-2">
-                                                <button type="button" data-edit-expcat="${c.id_kategori_pengeluaran}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
-                                                ${c.status_aktif ? `<button type="button" data-del-expcat="${c.id_kategori_pengeluaran}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
+                                                <button type="button" data-edit-expcat="${c.id_kategori_pengeluaran}" class="wn-link inline-flex min-h-[40px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
+                                                ${c.status_aktif ? `<button type="button" data-del-expcat="${c.id_kategori_pengeluaran}" ${isSubmitting ? 'disabled' : ''} class="inline-flex min-h-[40px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-55">Nonaktifkan</button>` : ''}
                                             </div>
                                         </div>
                                     `).join('')}
@@ -98,7 +113,7 @@ export function mountOwnerExpenseCategoriesView(container) {
                                                     <td class="px-4 py-3">${badgeStatusAktif(Boolean(c.status_aktif))}</td>
                                                     <td class="px-4 py-3 text-right space-x-2.5">
                                                         <button type="button" data-edit-expcat="${c.id_kategori_pengeluaran}" class="wn-link text-xs">Ubah</button>
-                                                        ${c.status_aktif ? `<button type="button" data-del-expcat="${c.id_kategori_pengeluaran}" class="text-xs font-semibold text-danger hover:text-red-800">Nonaktifkan</button>` : ''}
+                                                        ${c.status_aktif ? `<button type="button" data-del-expcat="${c.id_kategori_pengeluaran}" ${isSubmitting ? 'disabled' : ''} class="text-xs font-semibold text-danger hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-55">Nonaktifkan</button>` : ''}
                                                     </td>
                                                 </tr>
                                             `).join('')}
@@ -117,7 +132,7 @@ export function mountOwnerExpenseCategoriesView(container) {
                                 <label for="expcat-nama" class="wn-label">Nama Kategori <span class="text-danger">*</span></label>
                                 <input id="expcat-nama" type="text" required value="${escapeHtml(editing?.nama_kategori || '')}" class="wn-input" />
                             </div>
-                            <label class="flex items-center gap-2 text-xs text-ink">
+                            <label for="expcat-aktif" class="flex min-h-[40px] sm:min-h-[32px] items-center gap-2 text-xs text-ink">
                                 <input id="expcat-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="wn-checkbox" />
                                 <span>Status Aktif</span>
                             </label>
@@ -151,11 +166,26 @@ export function mountOwnerExpenseCategoriesView(container) {
         });
         container.querySelectorAll('[data-del-expcat]').forEach((b) =>
             b.addEventListener('click', async () => {
+                if (isDisposed || isSubmitting) {
+                    return;
+                }
+                isSubmitting = true;
+                errorObj = null;
+                render();
+
                 try {
-                    await washnoteApi.deleteExpenseCategory(Number(b.getAttribute('data-del-expcat')));
+                    await washnoteApi.deleteExpenseCategory(Number(b.getAttribute('data-del-expcat')), { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
+                    isSubmitting = false;
                     showToast('Kategori pengeluaran dinonaktifkan.', 'success');
                     await loadCategories();
                 } catch (err) {
+                    if (isDisposed || isAbortError(err)) {
+                        return;
+                    }
+                    isSubmitting = false;
                     errorObj = err;
                     render();
                 }
@@ -164,6 +194,9 @@ export function mountOwnerExpenseCategoriesView(container) {
 
         container.querySelector('#expcat-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const payload = {
                 nama_kategori: container.querySelector('#expcat-nama')?.value?.trim(),
                 status_aktif: Boolean(container.querySelector('#expcat-aktif')?.checked),
@@ -173,16 +206,25 @@ export function mountOwnerExpenseCategoriesView(container) {
             render();
             try {
                 if (editingExpCatId) {
-                    await washnoteApi.updateExpenseCategory(editingExpCatId, payload);
+                    await washnoteApi.updateExpenseCategory(editingExpCatId, payload, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Kategori pengeluaran diperbarui.', 'success');
                     editingExpCatId = null;
                 } else {
-                    await washnoteApi.createExpenseCategory(payload);
+                    await washnoteApi.createExpenseCategory(payload, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Kategori pengeluaran ditambahkan.', 'success');
                 }
                 isSubmitting = false;
                 await loadCategories();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -191,4 +233,9 @@ export function mountOwnerExpenseCategoriesView(container) {
     }
 
     loadCategories();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }

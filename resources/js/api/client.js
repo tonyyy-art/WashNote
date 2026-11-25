@@ -14,9 +14,14 @@ export class ApiError extends Error {
 }
 
 let unauthorizedHandler = null;
+let isHandlingUnauthorized = false;
 
 export function setUnauthorizedHandler(handler) {
     unauthorizedHandler = handler;
+}
+
+export function isAbortError(err) {
+    return Boolean(err && (err.name === 'AbortError' || err.errorCode === 'ABORTED'));
 }
 
 export function getStoredToken() {
@@ -37,6 +42,8 @@ export function getStoredUser() {
 }
 
 export function saveAuthSession(token, user) {
+    isHandlingUnauthorized = false;
+
     try {
         if (token) {
             window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
@@ -87,7 +94,7 @@ function buildUrl(path, query = null) {
     return qs !== '' ? `${base}?${qs}` : base;
 }
 
-export async function apiRequest(method, path, { body = null, query = null, headers = {}, skipAuthRedirect = false } = {}) {
+export async function apiRequest(method, path, { body = null, query = null, headers = {}, skipAuthRedirect = false, signal = undefined } = {}) {
     const reqHeaders = {
         Accept: 'application/json',
         ...headers,
@@ -110,13 +117,28 @@ export async function apiRequest(method, path, { body = null, query = null, head
             method,
             headers: reqHeaders,
             body: body !== null ? JSON.stringify(body) : undefined,
+            signal,
         });
-    } catch {
+    } catch (networkErr) {
+        if (networkErr?.name === 'AbortError' || signal?.aborted) {
+            const abortErr = networkErr?.name === 'AbortError' ? networkErr : new Error('Permintaan dibatalkan.');
+            abortErr.name = 'AbortError';
+            abortErr.errorCode = 'ABORTED';
+            throw abortErr;
+        }
+
         throw new ApiError({
             status: 0,
             errorCode: 'NETWORK_ERROR',
             message: 'Tidak dapat terhubung ke server backend. Periksa koneksi jaringan atau server Laravel.',
         });
+    }
+
+    if (signal?.aborted) {
+        const abortErr = new Error('Permintaan dibatalkan.');
+        abortErr.name = 'AbortError';
+        abortErr.errorCode = 'ABORTED';
+        throw abortErr;
     }
 
     let payload = null;
@@ -128,6 +150,13 @@ export async function apiRequest(method, path, { body = null, query = null, head
         } catch {
             payload = null;
         }
+    }
+
+    if (signal?.aborted) {
+        const abortErr = new Error('Permintaan dibatalkan.');
+        abortErr.name = 'AbortError';
+        abortErr.errorCode = 'ABORTED';
+        throw abortErr;
     }
 
     if (!response.ok) {
@@ -142,8 +171,11 @@ export async function apiRequest(method, path, { body = null, query = null, head
 
         if (response.status === 401 && !skipAuthRedirect) {
             clearAuthSession();
-            if (typeof unauthorizedHandler === 'function') {
-                unauthorizedHandler(error);
+            if (!isHandlingUnauthorized) {
+                isHandlingUnauthorized = true;
+                if (typeof unauthorizedHandler === 'function') {
+                    unauthorizedHandler(error);
+                }
             }
         }
 
@@ -155,83 +187,86 @@ export async function apiRequest(method, path, { body = null, query = null, head
 
 export const washnoteApi = {
     // Auth & profile
-    login: (credentials) => apiRequest('POST', '/login', { body: credentials, skipAuthRedirect: true }),
-    logout: () => apiRequest('POST', '/logout', { skipAuthRedirect: true }),
-    getProfile: () => apiRequest('GET', '/profile'),
-    changePassword: (payload) => apiRequest('PUT', '/profile/password', { body: payload }),
+    login: (credentials, options = {}) => apiRequest('POST', '/login', { body: credentials, skipAuthRedirect: true, signal: options?.signal }),
+    logout: (options = {}) => apiRequest('POST', '/logout', { skipAuthRedirect: true, signal: options?.signal }),
+    getProfile: (options = {}) => apiRequest('GET', '/profile', { signal: options?.signal }),
+    changePassword: (payload, options = {}) => apiRequest('PUT', '/profile/password', { body: payload, signal: options?.signal }),
 
     // Operational Catalog & Schedule (Kasir + Owner)
-    getCatalog: () => apiRequest('GET', '/katalog'),
-    getOperatingHours: () => apiRequest('GET', '/jam-operasional'),
-    getOperatingStatus: () => apiRequest('GET', '/jam-operasional/status'),
-    getOperatingExceptions: (query = {}) => apiRequest('GET', '/jam-operasional/pengecualian', { query }),
+    getCatalog: (options = {}) => apiRequest('GET', '/katalog', { signal: options?.signal }),
+    getOperatingHours: (options = {}) => apiRequest('GET', '/jam-operasional', { signal: options?.signal }),
+    getOperatingStatus: (options = {}) => apiRequest('GET', '/jam-operasional/status', { signal: options?.signal }),
+    getOperatingExceptions: (query = {}, options = {}) => apiRequest('GET', '/jam-operasional/pengecualian', { query, signal: options?.signal }),
 
     // Orders & Payments (Kasir + Owner)
-    getOrders: (query = {}) => apiRequest('GET', '/pesanan', { query }),
-    createOrder: (payload, idempotencyKey) =>
+    getOrders: (query = {}, options = {}) => apiRequest('GET', '/pesanan', { query, signal: options?.signal }),
+    createOrder: (payload, idempotencyKey, options = {}) =>
         apiRequest('POST', '/pesanan', {
             body: payload,
             headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
+            signal: options?.signal,
         }),
-    getOrder: (id) => apiRequest('GET', `/pesanan/${id}`),
-    updateOrder: (id, payload) => apiRequest('PUT', `/pesanan/${id}`, { body: payload }),
-    updateOrderMetadata: (id, payload) => apiRequest('PATCH', `/pesanan/${id}/metadata`, { body: payload }),
-    cancelOrder: (id, payload) => apiRequest('POST', `/pesanan/${id}/batal`, { body: payload }),
-    updateVehicleStatus: (vehicleId, payload) => apiRequest('PUT', `/kendaraan-pesanan/${vehicleId}/status`, { body: payload }),
-    getPayment: (orderId) => apiRequest('GET', `/pesanan/${orderId}/pembayaran`),
-    storePayment: (orderId, payload, idempotencyKey) =>
+    getOrder: (id, options = {}) => apiRequest('GET', `/pesanan/${id}`, { signal: options?.signal }),
+    updateOrder: (id, payload, options = {}) => apiRequest('PUT', `/pesanan/${id}`, { body: payload, signal: options?.signal }),
+    updateOrderMetadata: (id, payload, options = {}) => apiRequest('PATCH', `/pesanan/${id}/metadata`, { body: payload, signal: options?.signal }),
+    cancelOrder: (id, payload, options = {}) => apiRequest('POST', `/pesanan/${id}/batal`, { body: payload, signal: options?.signal }),
+    updateVehicleStatus: (vehicleId, payload, options = {}) => apiRequest('PUT', `/kendaraan-pesanan/${vehicleId}/status`, { body: payload, signal: options?.signal }),
+    getPayment: (orderId, options = {}) => apiRequest('GET', `/pesanan/${orderId}/pembayaran`, { signal: options?.signal }),
+    storePayment: (orderId, payload, idempotencyKey, options = {}) =>
         apiRequest('POST', `/pesanan/${orderId}/pembayaran`, {
             body: payload,
             headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
+            signal: options?.signal,
         }),
 
     // Owner: Operating hours CRUD
-    createOperatingHour: (payload) => apiRequest('POST', '/jam-operasional', { body: payload }),
-    updateOperatingHour: (id, payload) => apiRequest('PUT', `/jam-operasional/${id}`, { body: payload }),
-    deleteOperatingHour: (id) => apiRequest('DELETE', `/jam-operasional/${id}`),
-    createOperatingException: (payload) => apiRequest('POST', '/jam-operasional/pengecualian', { body: payload }),
-    updateOperatingException: (id, payload) => apiRequest('PUT', `/jam-operasional/pengecualian/${id}`, { body: payload }),
-    deleteOperatingException: (id) => apiRequest('DELETE', `/jam-operasional/pengecualian/${id}`),
+    createOperatingHour: (payload, options = {}) => apiRequest('POST', '/jam-operasional', { body: payload, signal: options?.signal }),
+    updateOperatingHour: (id, payload, options = {}) => apiRequest('PUT', `/jam-operasional/${id}`, { body: payload, signal: options?.signal }),
+    deleteOperatingHour: (id, options = {}) => apiRequest('DELETE', `/jam-operasional/${id}`, { signal: options?.signal }),
+    createOperatingException: (payload, options = {}) => apiRequest('POST', '/jam-operasional/pengecualian', { body: payload, signal: options?.signal }),
+    updateOperatingException: (id, payload, options = {}) => apiRequest('PUT', `/jam-operasional/pengecualian/${id}`, { body: payload, signal: options?.signal }),
+    deleteOperatingException: (id, options = {}) => apiRequest('DELETE', `/jam-operasional/pengecualian/${id}`, { signal: options?.signal }),
 
     // Owner: Vehicle categories, services, tariffs
-    getVehicleCategories: () => apiRequest('GET', '/kategori-kendaraan'),
-    createVehicleCategory: (payload) => apiRequest('POST', '/kategori-kendaraan', { body: payload }),
-    updateVehicleCategory: (id, payload) => apiRequest('PUT', `/kategori-kendaraan/${id}`, { body: payload }),
-    deleteVehicleCategory: (id) => apiRequest('DELETE', `/kategori-kendaraan/${id}`),
+    getVehicleCategories: (options = {}) => apiRequest('GET', '/kategori-kendaraan', { signal: options?.signal }),
+    createVehicleCategory: (payload, options = {}) => apiRequest('POST', '/kategori-kendaraan', { body: payload, signal: options?.signal }),
+    updateVehicleCategory: (id, payload, options = {}) => apiRequest('PUT', `/kategori-kendaraan/${id}`, { body: payload, signal: options?.signal }),
+    deleteVehicleCategory: (id, options = {}) => apiRequest('DELETE', `/kategori-kendaraan/${id}`, { signal: options?.signal }),
 
-    getServices: (query = {}) => apiRequest('GET', '/layanan', { query }),
-    createService: (payload) => apiRequest('POST', '/layanan', { body: payload }),
-    updateService: (id, payload) => apiRequest('PUT', `/layanan/${id}`, { body: payload }),
-    deleteService: (id) => apiRequest('DELETE', `/layanan/${id}`),
+    getServices: (query = {}, options = {}) => apiRequest('GET', '/layanan', { query, signal: options?.signal }),
+    createService: (payload, options = {}) => apiRequest('POST', '/layanan', { body: payload, signal: options?.signal }),
+    updateService: (id, payload, options = {}) => apiRequest('PUT', `/layanan/${id}`, { body: payload, signal: options?.signal }),
+    deleteService: (id, options = {}) => apiRequest('DELETE', `/layanan/${id}`, { signal: options?.signal }),
 
-    getTariffs: () => apiRequest('GET', '/harga-layanan'),
-    createTariff: (payload) => apiRequest('POST', '/harga-layanan', { body: payload }),
-    updateTariff: (id, payload) => apiRequest('PUT', `/harga-layanan/${id}`, { body: payload }),
-    deleteTariff: (id) => apiRequest('DELETE', `/harga-layanan/${id}`),
+    getTariffs: (options = {}) => apiRequest('GET', '/harga-layanan', { signal: options?.signal }),
+    createTariff: (payload, options = {}) => apiRequest('POST', '/harga-layanan', { body: payload, signal: options?.signal }),
+    updateTariff: (id, payload, options = {}) => apiRequest('PUT', `/harga-layanan/${id}`, { body: payload, signal: options?.signal }),
+    deleteTariff: (id, options = {}) => apiRequest('DELETE', `/harga-layanan/${id}`, { signal: options?.signal }),
 
     // Owner: Kasir accounts
-    getKasir: (query = {}) => apiRequest('GET', '/kasir', { query }),
-    createKasir: (payload) => apiRequest('POST', '/kasir', { body: payload }),
-    updateKasir: (id, payload) => apiRequest('PUT', `/kasir/${id}`, { body: payload }),
-    updateKasirStatus: (id, payload) => apiRequest('PATCH', `/kasir/${id}/status`, { body: payload }),
-    resetKasirPassword: (id, payload) => apiRequest('PUT', `/kasir/${id}/reset-password`, { body: payload }),
+    getKasir: (query = {}, options = {}) => apiRequest('GET', '/kasir', { query, signal: options?.signal }),
+    createKasir: (payload, options = {}) => apiRequest('POST', '/kasir', { body: payload, signal: options?.signal }),
+    updateKasir: (id, payload, options = {}) => apiRequest('PUT', `/kasir/${id}`, { body: payload, signal: options?.signal }),
+    updateKasirStatus: (id, payload, options = {}) => apiRequest('PATCH', `/kasir/${id}/status`, { body: payload, signal: options?.signal }),
+    resetKasirPassword: (id, payload, options = {}) => apiRequest('PUT', `/kasir/${id}/reset-password`, { body: payload, signal: options?.signal }),
 
     // Owner: Expenses & Reports
-    getExpenseCategories: () => apiRequest('GET', '/kategori-pengeluaran'),
-    createExpenseCategory: (payload) => apiRequest('POST', '/kategori-pengeluaran', { body: payload }),
-    updateExpenseCategory: (id, payload) => apiRequest('PUT', `/kategori-pengeluaran/${id}`, { body: payload }),
-    deleteExpenseCategory: (id) => apiRequest('DELETE', `/kategori-pengeluaran/${id}`),
+    getExpenseCategories: (options = {}) => apiRequest('GET', '/kategori-pengeluaran', { signal: options?.signal }),
+    createExpenseCategory: (payload, options = {}) => apiRequest('POST', '/kategori-pengeluaran', { body: payload, signal: options?.signal }),
+    updateExpenseCategory: (id, payload, options = {}) => apiRequest('PUT', `/kategori-pengeluaran/${id}`, { body: payload, signal: options?.signal }),
+    deleteExpenseCategory: (id, options = {}) => apiRequest('DELETE', `/kategori-pengeluaran/${id}`, { signal: options?.signal }),
 
-    getExpenses: (query = {}) => apiRequest('GET', '/pengeluaran', { query }),
-    createExpense: (payload, idempotencyKey) =>
+    getExpenses: (query = {}, options = {}) => apiRequest('GET', '/pengeluaran', { query, signal: options?.signal }),
+    createExpense: (payload, idempotencyKey, options = {}) =>
         apiRequest('POST', '/pengeluaran', {
             body: payload,
             headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
+            signal: options?.signal,
         }),
-    updateExpense: (id, payload) => apiRequest('PUT', `/pengeluaran/${id}`, { body: payload }),
-    cancelExpense: (id, payload) => apiRequest('PATCH', `/pengeluaran/${id}/batal`, { body: payload }),
+    updateExpense: (id, payload, options = {}) => apiRequest('PUT', `/pengeluaran/${id}`, { body: payload, signal: options?.signal }),
+    cancelExpense: (id, payload, options = {}) => apiRequest('PATCH', `/pengeluaran/${id}/batal`, { body: payload, signal: options?.signal }),
 
-    getReportSummary: (query) => apiRequest('GET', '/laporan', { query }),
-    getReportDaily: (query) => apiRequest('GET', '/laporan/harian', { query }),
-    getAuditLogs: (query = {}) => apiRequest('GET', '/riwayat-perubahan', { query }),
+    getReportSummary: (query, options = {}) => apiRequest('GET', '/laporan', { query, signal: options?.signal }),
+    getReportDaily: (query, options = {}) => apiRequest('GET', '/laporan/harian', { query, signal: options?.signal }),
+    getAuditLogs: (query = {}, options = {}) => apiRequest('GET', '/riwayat-perubahan', { query, signal: options?.signal }),
 };

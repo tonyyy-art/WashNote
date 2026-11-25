@@ -7,9 +7,12 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class LaporanController extends Controller
 {
+    private const int MAX_DAILY_RANGE_DAYS = 366;
+
     /**
      * Summary financial report for a date range evaluated in `Asia/Jakarta`.
      */
@@ -75,7 +78,7 @@ class LaporanController extends Controller
     }
 
     /**
-     * Daily financial breakdown across a date range using portable `Asia/Jakarta` grouping.
+     * Daily financial breakdown across a date range using bounded SQL-grouped aggregation.
      */
     public function daily(Request $request): JsonResponse
     {
@@ -90,59 +93,95 @@ class LaporanController extends Controller
         $mulai = Carbon::parse($validated['tanggal_mulai'], $businessTz)->startOfDay();
         $akhir = Carbon::parse($validated['tanggal_akhir'], $businessTz)->endOfDay();
 
+        $totalDays = (int) $mulai->diffInDays($akhir->copy()->startOfDay()) + 1;
+
+        if ($totalDays > self::MAX_DAILY_RANGE_DAYS) {
+            throw ValidationException::withMessages([
+                'tanggal_akhir' => ['Rentang tanggal laporan harian maksimal 366 hari.'],
+            ]);
+        }
+
         $mulaiQuery = $mulai->copy()->timezone($appTz);
         $akhirExclusiveQuery = Carbon::parse($validated['tanggal_akhir'], $businessTz)
             ->addDay()
             ->startOfDay()
             ->timezone($appTz);
 
-        $pendapatanRows = DB::table('pembayaran')
-            ->join('pesanan', 'pembayaran.id_pesanan', '=', 'pesanan.id_pesanan')
-            ->where('pembayaran.status_pembayaran', 'sudah_dibayar')
-            ->where('pesanan.status_pesanan', '!=', 'dibatalkan')
-            ->where('pembayaran.waktu_penerimaan', '>=', $mulaiQuery)
-            ->where('pembayaran.waktu_penerimaan', '<', $akhirExclusiveQuery)
-            ->select(['pembayaran.waktu_penerimaan', 'pembayaran.jumlah_dibayar'])
-            ->get();
-
-        $pendapatanHarian = [];
-
-        foreach ($pendapatanRows as $row) {
-            $dateKey = $this->resolveBusinessDate((string) $row->waktu_penerimaan, $appTz, $businessTz);
-            $pendapatanHarian[$dateKey] = ($pendapatanHarian[$dateKey] ?? 0.0) + (float) $row->jumlah_dibayar;
-        }
-
         $akhirExclusiveDate = Carbon::parse($validated['tanggal_akhir'], $businessTz)
             ->addDay()
             ->toDateString();
 
-        $pengeluaranRows = DB::table('pengeluaran')
+        $pendapatanHarian = [];
+        $kendaraanHarian = [];
+
+        if ($appTz === $businessTz) {
+            $pendapatanGrouped = DB::table('pembayaran')
+                ->join('pesanan', 'pembayaran.id_pesanan', '=', 'pesanan.id_pesanan')
+                ->where('pembayaran.status_pembayaran', 'sudah_dibayar')
+                ->where('pesanan.status_pesanan', '!=', 'dibatalkan')
+                ->where('pembayaran.waktu_penerimaan', '>=', $mulaiQuery)
+                ->where('pembayaran.waktu_penerimaan', '<', $akhirExclusiveQuery)
+                ->selectRaw('DATE(pembayaran.waktu_penerimaan) as tanggal_bisnis, SUM(pembayaran.jumlah_dibayar) as total_pendapatan')
+                ->groupBy(DB::raw('DATE(pembayaran.waktu_penerimaan)'))
+                ->get();
+
+            foreach ($pendapatanGrouped as $row) {
+                $pendapatanHarian[(string) $row->tanggal_bisnis] = (float) $row->total_pendapatan;
+            }
+
+            $kendaraanGrouped = DB::table('kendaraan_pesanan')
+                ->join('pesanan', 'kendaraan_pesanan.id_pesanan', '=', 'pesanan.id_pesanan')
+                ->where('pesanan.status_pesanan', '!=', 'dibatalkan')
+                ->where('pesanan.waktu_pesanan', '>=', $mulaiQuery)
+                ->where('pesanan.waktu_pesanan', '<', $akhirExclusiveQuery)
+                ->selectRaw('DATE(pesanan.waktu_pesanan) as tanggal_bisnis, COUNT(kendaraan_pesanan.id_kendaraan_pesanan) as total_kendaraan')
+                ->groupBy(DB::raw('DATE(pesanan.waktu_pesanan)'))
+                ->get();
+
+            foreach ($kendaraanGrouped as $row) {
+                $kendaraanHarian[(string) $row->tanggal_bisnis] = (int) $row->total_kendaraan;
+            }
+        } else {
+            $pendapatanRows = DB::table('pembayaran')
+                ->join('pesanan', 'pembayaran.id_pesanan', '=', 'pesanan.id_pesanan')
+                ->where('pembayaran.status_pembayaran', 'sudah_dibayar')
+                ->where('pesanan.status_pesanan', '!=', 'dibatalkan')
+                ->where('pembayaran.waktu_penerimaan', '>=', $mulaiQuery)
+                ->where('pembayaran.waktu_penerimaan', '<', $akhirExclusiveQuery)
+                ->select(['pembayaran.waktu_penerimaan', 'pembayaran.jumlah_dibayar'])
+                ->get();
+
+            foreach ($pendapatanRows as $row) {
+                $dateKey = $this->resolveBusinessDate((string) $row->waktu_penerimaan, $appTz, $businessTz);
+                $pendapatanHarian[$dateKey] = ($pendapatanHarian[$dateKey] ?? 0.0) + (float) $row->jumlah_dibayar;
+            }
+
+            $kendaraanRows = DB::table('kendaraan_pesanan')
+                ->join('pesanan', 'kendaraan_pesanan.id_pesanan', '=', 'pesanan.id_pesanan')
+                ->where('pesanan.status_pesanan', '!=', 'dibatalkan')
+                ->where('pesanan.waktu_pesanan', '>=', $mulaiQuery)
+                ->where('pesanan.waktu_pesanan', '<', $akhirExclusiveQuery)
+                ->select(['pesanan.waktu_pesanan'])
+                ->get();
+
+            foreach ($kendaraanRows as $row) {
+                $dateKey = $this->resolveBusinessDate((string) $row->waktu_pesanan, $appTz, $businessTz);
+                $kendaraanHarian[$dateKey] = ($kendaraanHarian[$dateKey] ?? 0) + 1;
+            }
+        }
+
+        $pengeluaranGrouped = DB::table('pengeluaran')
             ->where('status_pengeluaran', 'aktif')
             ->where('tanggal_pengeluaran', '>=', $mulai->toDateString())
             ->where('tanggal_pengeluaran', '<', $akhirExclusiveDate)
-            ->select(['tanggal_pengeluaran', 'nominal'])
+            ->selectRaw('DATE(tanggal_pengeluaran) as tanggal_bisnis, SUM(nominal) as total_pengeluaran')
+            ->groupBy(DB::raw('DATE(tanggal_pengeluaran)'))
             ->get();
 
         $pengeluaranHarian = [];
 
-        foreach ($pengeluaranRows as $row) {
-            $dateKey = substr((string) $row->tanggal_pengeluaran, 0, 10);
-            $pengeluaranHarian[$dateKey] = ($pengeluaranHarian[$dateKey] ?? 0.0) + (float) $row->nominal;
-        }
-
-        $kendaraanRows = DB::table('kendaraan_pesanan')
-            ->join('pesanan', 'kendaraan_pesanan.id_pesanan', '=', 'pesanan.id_pesanan')
-            ->where('pesanan.status_pesanan', '!=', 'dibatalkan')
-            ->where('pesanan.waktu_pesanan', '>=', $mulaiQuery)
-            ->where('pesanan.waktu_pesanan', '<', $akhirExclusiveQuery)
-            ->select(['pesanan.waktu_pesanan'])
-            ->get();
-
-        $kendaraanHarian = [];
-
-        foreach ($kendaraanRows as $row) {
-            $dateKey = $this->resolveBusinessDate((string) $row->waktu_pesanan, $appTz, $businessTz);
-            $kendaraanHarian[$dateKey] = ($kendaraanHarian[$dateKey] ?? 0) + 1;
+        foreach ($pengeluaranGrouped as $row) {
+            $pengeluaranHarian[(string) $row->tanggal_bisnis] = (float) $row->total_pengeluaran;
         }
 
         $hasil = [];

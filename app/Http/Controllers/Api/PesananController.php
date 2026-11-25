@@ -14,6 +14,7 @@ use App\Services\Idempotency\IdempotencyService;
 use App\Services\Operasional\OperationalHoursService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -207,10 +208,17 @@ class PesananController extends Controller
                     'nomor_nota' => sprintf('#TRX-%s-%04d', $nowJakarta->format('Ymd'), (int) $created->id_pesanan),
                 ]);
 
+                $preloadedCategories = $this->preloadVehicleCategories($validated['kendaraan']);
+                $preloadedTariffs = $this->preloadTariffs($validated['kendaraan']);
+
                 foreach ($validated['kendaraan'] as $kendaraanIndex => $dataKendaraan) {
-                    $kategori = KategoriKendaraan::query()->findOrFail(
-                        $dataKendaraan['id_kategori_kendaraan']
-                    );
+                    $kategoriId = (int) $dataKendaraan['id_kategori_kendaraan'];
+                    /** @var KategoriKendaraan|null $kategori */
+                    $kategori = $preloadedCategories->get($kategoriId);
+
+                    if ($kategori === null) {
+                        throw (new ModelNotFoundException)->setModel(KategoriKendaraan::class, [$kategoriId]);
+                    }
 
                     if (! $kategori->status_aktif) {
                         throw ValidationException::withMessages([
@@ -232,6 +240,8 @@ class PesananController extends Controller
                                 (int) $kategori->id_kategori_kendaraan,
                                 (int) $kendaraanIndex,
                                 (int) $layananIndex,
+                                [],
+                                $preloadedTariffs,
                             )
                         );
                     }
@@ -893,6 +903,8 @@ class PesananController extends Controller
         array $incomingVehicles,
     ): void {
         $keptIds = [];
+        $preloadedCategories = $this->preloadVehicleCategories($incomingVehicles);
+        $preloadedTariffs = $this->preloadTariffs($incomingVehicles);
 
         foreach ($incomingVehicles as $kendaraanIndex => $dataKendaraan) {
             $incomingId = isset($dataKendaraan['id_kendaraan_pesanan'])
@@ -920,9 +932,13 @@ class PesananController extends Controller
                 $keptIds[] = $incomingId;
             }
 
-            $kategori = KategoriKendaraan::query()->findOrFail(
-                $dataKendaraan['id_kategori_kendaraan']
-            );
+            $kategoriId = (int) $dataKendaraan['id_kategori_kendaraan'];
+            /** @var KategoriKendaraan|null $kategori */
+            $kategori = $preloadedCategories->get($kategoriId);
+
+            if ($kategori === null) {
+                throw (new ModelNotFoundException)->setModel(KategoriKendaraan::class, [$kategoriId]);
+            }
 
             $categoryChanged = $targetVehicle === null
                 || (int) $targetVehicle->id_kategori_kendaraan !== (int) $kategori->id_kategori_kendaraan;
@@ -968,6 +984,7 @@ class PesananController extends Controller
                         (int) $kendaraanIndex,
                         (int) $layananIndex,
                         $existingHargaIds,
+                        $preloadedTariffs,
                     )
                 );
             }
@@ -1185,10 +1202,72 @@ class PesananController extends Controller
     }
 
     /**
+     * Batch-load vehicle categories referenced across all incoming vehicles in a single query.
+     *
+     * @param  array<int, array<string, mixed>>  $kendaraanPayload
+     * @return Collection<int, KategoriKendaraan>
+     */
+    private function preloadVehicleCategories(array $kendaraanPayload): Collection
+    {
+        $categoryIds = [];
+
+        foreach ($kendaraanPayload as $item) {
+            if (isset($item['id_kategori_kendaraan'])) {
+                $categoryIds[] = (int) $item['id_kategori_kendaraan'];
+            }
+        }
+
+        $uniqueIds = array_values(array_unique($categoryIds));
+
+        if ($uniqueIds === []) {
+            return collect();
+        }
+
+        return KategoriKendaraan::query()
+            ->whereIn('id_kategori_kendaraan', $uniqueIds)
+            ->get()
+            ->keyBy('id_kategori_kendaraan');
+    }
+
+    /**
+     * Batch-load tariffs and related services/categories across all vehicles in a single query.
+     *
+     * @param  array<int, array<string, mixed>>  $kendaraanPayload
+     * @return Collection<int, HargaLayanan>
+     */
+    private function preloadTariffs(array $kendaraanPayload): Collection
+    {
+        $hargaIds = [];
+
+        foreach ($kendaraanPayload as $item) {
+            foreach ($item['layanan'] ?? [] as $line) {
+                if (isset($line['id_harga'])) {
+                    $hargaIds[] = (int) $line['id_harga'];
+                }
+            }
+        }
+
+        $uniqueIds = array_values(array_unique($hargaIds));
+
+        if ($uniqueIds === []) {
+            return collect();
+        }
+
+        return HargaLayanan::with([
+            'layanan',
+            'kategoriKendaraan',
+        ])
+            ->whereIn('id_harga', $uniqueIds)
+            ->get()
+            ->keyBy('id_harga');
+    }
+
+    /**
      * Validate a tariff entry and build snapshot attributes for detail_layanan.
      *
      * @param  array<string, mixed>  $dataLayanan
      * @param  array<int, int>  $allowedInactiveHargaIds
+     * @param  Collection<int, HargaLayanan>|null  $preloadedTariffs
      * @return array{
      *     id_harga: int,
      *     nama_layanan_snapshot: string,
@@ -1204,11 +1283,20 @@ class PesananController extends Controller
         int $kendaraanIndex,
         int $layananIndex,
         array $allowedInactiveHargaIds = [],
+        ?Collection $preloadedTariffs = null,
     ): array {
-        $harga = HargaLayanan::with([
-            'layanan',
-            'kategoriKendaraan',
-        ])->findOrFail($dataLayanan['id_harga']);
+        $hargaId = (int) $dataLayanan['id_harga'];
+        /** @var HargaLayanan|null $harga */
+        $harga = $preloadedTariffs !== null
+            ? $preloadedTariffs->get($hargaId)
+            : HargaLayanan::with([
+                'layanan',
+                'kategoriKendaraan',
+            ])->findOrFail($hargaId);
+
+        if ($harga === null) {
+            throw (new ModelNotFoundException)->setModel(HargaLayanan::class, [$hargaId]);
+        }
 
         $wasAlreadyOnVehicle = in_array((int) $harga->id_harga, $allowedInactiveHargaIds, true);
 

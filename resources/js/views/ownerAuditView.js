@@ -1,4 +1,4 @@
-import { washnoteApi } from '../api/client.js';
+import { isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion } from '../motion/motionSystem.js';
 import { APP_VIEWS, navigateBack } from '../state/store.js';
 import {
@@ -215,6 +215,8 @@ function stripSensitiveTechnicalFields(obj) {
 
 export function mountOwnerAuditView(container) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let isLoading = true;
     let errorObj = null;
     let auditPage = null;
@@ -225,19 +227,32 @@ export function mountOwnerAuditView(container) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
-            const res = await washnoteApi.getAuditLogs({ ...filters, per_page: 15 });
+            const res = await washnoteApi.getAuditLogs({ ...filters, per_page: 15 }, { signal: abortController.signal });
+            if (isDisposed) {
+                return;
+            }
             auditPage = res?.data || null;
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isLoading = false;
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         const rows = auditPage?.data || [];
         const hasFilter = filters.entitas !== '' || filters.record_id !== '';
 
@@ -394,4 +409,9 @@ export function mountOwnerAuditView(container) {
     }
 
     loadLogs();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }

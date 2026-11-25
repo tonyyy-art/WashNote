@@ -10,6 +10,9 @@ let lenisScrollListenerBound = false;
 let activeViewContext = null;
 let reducedMotionQuery = null;
 let reducedMotionListener = null;
+let pendingRefreshRafId = null;
+const activeStandaloneTweens = new Set();
+let activeToastTween = null;
 
 /**
  * Check whether motion should be minimized for accessibility preferences.
@@ -80,7 +83,7 @@ export function initSmoothScroll() {
         reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
         reducedMotionListener = (event) => {
             if (event.matches) {
-                destroySmoothScroll();
+                destroySmoothScroll({ detachMediaListener: false });
                 cleanupViewMotion();
             } else {
                 initSmoothScroll();
@@ -93,9 +96,17 @@ export function initSmoothScroll() {
 }
 
 /**
- * Cleanly destroy Lenis instance and remove GSAP ticker integration.
+ * Cleanly destroy Lenis instance, ticker integration, and OS reduced-motion listener.
  */
-export function destroySmoothScroll() {
+export function destroySmoothScroll({ detachMediaListener = true } = {}) {
+    if (detachMediaListener && reducedMotionQuery && reducedMotionListener) {
+        if (typeof reducedMotionQuery.removeEventListener === 'function') {
+            reducedMotionQuery.removeEventListener('change', reducedMotionListener);
+        }
+        reducedMotionQuery = null;
+        reducedMotionListener = null;
+    }
+
     if (lenisTickerCallback) {
         gsap.ticker.remove(lenisTickerCallback);
         lenisTickerCallback = null;
@@ -149,9 +160,21 @@ export function scrollToElement(target, offset = -16) {
 }
 
 /**
- * Clean up active GSAP context and ScrollTriggers belonging to the outgoing view.
+ * Clean up active GSAP context, standalone tweens, pending animation frame, and ScrollTriggers belonging to the outgoing view.
  */
 export function cleanupViewMotion() {
+    if (pendingRefreshRafId !== null && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(pendingRefreshRafId);
+        pendingRefreshRafId = null;
+    }
+
+    for (const tween of activeStandaloneTweens) {
+        if (tween && typeof tween.kill === 'function') {
+            tween.kill();
+        }
+    }
+    activeStandaloneTweens.clear();
+
     if (activeViewContext) {
         activeViewContext.revert();
         activeViewContext = null;
@@ -169,7 +192,11 @@ export function createViewMotion(container) {
         if (typeof window === 'undefined') {
             return;
         }
-        window.requestAnimationFrame(() => {
+        if (pendingRefreshRafId !== null) {
+            window.cancelAnimationFrame(pendingRefreshRafId);
+        }
+        pendingRefreshRafId = window.requestAnimationFrame(() => {
+            pendingRefreshRafId = null;
             ScrollTrigger.refresh();
         });
     }
@@ -200,14 +227,14 @@ export function createViewMotion(container) {
                 gsap.fromTo(
                     cards,
                     {
-                        opacity: 0,
-                        y: rich ? 12 : 0,
+                        opacity: 0.25,
+                        y: rich ? 8 : 0,
                     },
                     {
                         opacity: 1,
                         y: 0,
-                        duration: rich ? 0.24 : 0.16,
-                        stagger: rich ? 0.032 : 0.015,
+                        duration: rich ? 0.14 : 0.08,
+                        stagger: rich ? 0.012 : 0,
                         ease: 'power2.out',
                         clearProps: 'transform,opacity',
                     }
@@ -231,13 +258,13 @@ export function createViewMotion(container) {
                 if (immediateReveals.length > 0) {
                     gsap.fromTo(
                         immediateReveals,
-                        { opacity: 0, y: rich ? 10 : 0 },
+                        { opacity: 0.3, y: rich ? 6 : 0 },
                         {
                             opacity: 1,
                             y: 0,
-                            duration: rich ? 0.3 : 0.18,
-                            stagger: rich ? 0.04 : 0,
-                            delay: rich ? 0.06 : 0,
+                            duration: rich ? 0.16 : 0.09,
+                            stagger: rich ? 0.015 : 0,
+                            delay: 0,
                             ease: 'power2.out',
                             clearProps: 'transform,opacity',
                         }
@@ -270,6 +297,16 @@ export function createViewMotion(container) {
         refresh();
     }
 
+    function trackStandaloneTween(tween) {
+        if (!tween) {
+            return;
+        }
+        activeStandaloneTweens.add(tween);
+        tween.eventCallback('onComplete', () => {
+            activeStandaloneTweens.delete(tween);
+        });
+    }
+
     function animateStateFade(selector = '[data-motion-state]') {
         if (!container || shouldReduceMotion()) {
             return;
@@ -280,10 +317,13 @@ export function createViewMotion(container) {
             return;
         }
 
-        gsap.fromTo(
-            targets,
-            { opacity: 0 },
-            { opacity: 1, duration: 0.18, ease: 'power1.out', clearProps: 'opacity' }
+        gsap.killTweensOf(targets);
+        trackStandaloneTween(
+            gsap.fromTo(
+                targets,
+                { opacity: 0 },
+                { opacity: 1, duration: 0.16, ease: 'power1.out', clearProps: 'opacity' }
+            )
         );
     }
 
@@ -295,16 +335,19 @@ export function createViewMotion(container) {
 
         const targets = container.querySelectorAll(selector);
         if (targets.length > 0) {
-            gsap.fromTo(
-                targets,
-                { opacity: 0, y: canUseRichMotion() ? 6 : 0 },
-                {
-                    opacity: 1,
-                    y: 0,
-                    duration: canUseRichMotion() ? 0.22 : 0.12,
-                    ease: 'power2.out',
-                    clearProps: 'transform,opacity',
-                }
+            gsap.killTweensOf(targets);
+            trackStandaloneTween(
+                gsap.fromTo(
+                    targets,
+                    { opacity: 0, y: canUseRichMotion() ? 6 : 0 },
+                    {
+                        opacity: 1,
+                        y: 0,
+                        duration: canUseRichMotion() ? 0.2 : 0.12,
+                        ease: 'power2.out',
+                        clearProps: 'transform,opacity',
+                    }
+                )
             );
         }
 
@@ -356,16 +399,38 @@ export function syncBottomNavIndicator(navEl, activeBtn, immediate = false) {
 }
 
 /**
+ * Cancel any active toast animation cleanly during session reset.
+ */
+export function cleanupToastMotion() {
+    if (activeToastTween && typeof activeToastTween.kill === 'function') {
+        activeToastTween.kill();
+        activeToastTween = null;
+    }
+}
+
+/**
  * Subtle toast reveal animation that never touches view contexts or triggers view re-renders.
  */
 export function animateToastElement(el) {
+    cleanupToastMotion();
+
     if (!el || shouldReduceMotion()) {
         return;
     }
 
-    gsap.fromTo(
+    gsap.killTweensOf(el);
+    activeToastTween = gsap.fromTo(
         el,
         { opacity: 0, y: canUseRichMotion() ? -6 : 0 },
-        { opacity: 1, y: 0, duration: 0.2, ease: 'power2.out', clearProps: 'transform,opacity' }
+        {
+            opacity: 1,
+            y: 0,
+            duration: 0.2,
+            ease: 'power2.out',
+            clearProps: 'transform,opacity',
+            onComplete: () => {
+                activeToastTween = null;
+            },
+        }
     );
 }

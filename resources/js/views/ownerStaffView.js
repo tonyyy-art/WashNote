@@ -1,4 +1,4 @@
-import { washnoteApi } from '../api/client.js';
+import { isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
 import { APP_VIEWS, navigateBack, showToast } from '../state/store.js';
 import {
@@ -15,6 +15,8 @@ import {
 
 export function mountOwnerStaffView(container) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let isLoading = true;
     let isSubmitting = false;
     let errorObj = null;
@@ -28,19 +30,32 @@ export function mountOwnerStaffView(container) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
-            const res = await washnoteApi.getKasir({ ...filters, per_page: 10 });
+            const res = await washnoteApi.getKasir({ ...filters, per_page: 10 }, { signal: abortController.signal });
+            if (isDisposed) {
+                return;
+            }
             kasirPage = res?.data || null;
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isLoading = false;
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         const rows = kasirPage?.data || [];
         const selected = selectedKasirId ? rows.find((r) => Number(r.id_pengguna) === Number(selectedKasirId)) : null;
         const hasFilter = filters.search !== '' || filters.status !== 'all';
@@ -305,11 +320,17 @@ export function mountOwnerStaffView(container) {
             errorObj = null;
             render();
             try {
-                await washnoteApi.createKasir(payload);
+                await washnoteApi.createKasir(payload, { signal: abortController.signal });
+                if (isDisposed) {
+                    return;
+                }
                 showToast('Akun kasir berhasil dibuat.', 'success');
                 isSubmitting = false;
                 await loadStaff();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -318,6 +339,9 @@ export function mountOwnerStaffView(container) {
 
         container.querySelector('#kasir-edit-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const payload = {
                 nama_lengkap: container.querySelector('#edit-k-name')?.value?.trim() || '',
                 username: selected.username,
@@ -326,13 +350,19 @@ export function mountOwnerStaffView(container) {
             errorObj = null;
             render();
             try {
-                await washnoteApi.updateKasir(selected.id_pengguna, payload);
+                await washnoteApi.updateKasir(selected.id_pengguna, payload, { signal: abortController.signal });
+                if (isDisposed) {
+                    return;
+                }
                 showToast('Data kasir diperbarui.', 'success');
                 selectedKasirId = null;
                 modalMode = null;
                 isSubmitting = false;
                 await loadStaff();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -341,6 +371,9 @@ export function mountOwnerStaffView(container) {
 
         container.querySelector('#kasir-status-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const payload = {
                 status_aktif: !selected.status_aktif,
                 alasan: container.querySelector('#status-k-alasan')?.value?.trim() || '',
@@ -349,13 +382,19 @@ export function mountOwnerStaffView(container) {
             errorObj = null;
             render();
             try {
-                await washnoteApi.updateKasirStatus(selected.id_pengguna, payload);
+                await washnoteApi.updateKasirStatus(selected.id_pengguna, payload, { signal: abortController.signal });
+                if (isDisposed) {
+                    return;
+                }
                 showToast('Status kasir diperbarui.', 'success');
                 selectedKasirId = null;
                 modalMode = null;
                 isSubmitting = false;
                 await loadStaff();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -364,6 +403,9 @@ export function mountOwnerStaffView(container) {
 
         container.querySelector('#kasir-reset-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const payload = {
                 password_baru: container.querySelector('#reset-k-pass')?.value || '',
                 password_baru_confirmation: container.querySelector('#reset-k-conf')?.value || '',
@@ -372,13 +414,19 @@ export function mountOwnerStaffView(container) {
             errorObj = null;
             render();
             try {
-                await washnoteApi.resetKasirPassword(selected.id_pengguna, payload);
+                await washnoteApi.resetKasirPassword(selected.id_pengguna, payload, { signal: abortController.signal });
+                if (isDisposed) {
+                    return;
+                }
                 showToast('Password kasir berhasil direset.', 'success');
                 selectedKasirId = null;
                 modalMode = null;
                 isSubmitting = false;
                 await loadStaff();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -387,4 +435,9 @@ export function mountOwnerStaffView(container) {
     }
 
     loadStaff();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }

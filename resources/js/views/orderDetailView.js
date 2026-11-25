@@ -1,4 +1,4 @@
-import { generateIdempotencyKey, washnoteApi } from '../api/client.js';
+import { generateIdempotencyKey, isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
 import { APP_VIEWS, navigateBack, showToast, state } from '../state/store.js';
 import {
@@ -22,6 +22,8 @@ import {
 
 export function mountOrderDetailView(container, orderId) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let isLoading = true;
     let isSubmitting = false;
     let errorObj = null;
@@ -43,8 +45,15 @@ export function mountOrderDetailView(container, orderId) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
-            const [orderRes, catRes] = await Promise.all([washnoteApi.getOrder(orderId), washnoteApi.getCatalog()]);
+            const [orderRes, catRes] = await Promise.all([
+                washnoteApi.getOrder(orderId, { signal: abortController.signal }),
+                washnoteApi.getCatalog({ signal: abortController.signal }),
+            ]);
+            if (isDisposed) {
+                return;
+            }
             order = orderRes?.data?.pesanan || null;
             totals = {
                 subtotal_utama: orderRes?.data?.subtotal_utama ?? 0,
@@ -54,11 +63,17 @@ export function mountOrderDetailView(container, orderId) {
             catalog = catRes?.data || { kategori_kendaraan: [], layanan: [], harga_layanan: [] };
             hydrateEditModels();
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isLoading = false;
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
@@ -121,7 +136,7 @@ export function mountOrderDetailView(container, orderId) {
     }
 
     async function handleVehicleStatusChange(vehicleId, nextStatus) {
-        if (isSubmitting || !order) {
+        if (isDisposed || isSubmitting || !order) {
             return;
         }
 
@@ -129,14 +144,26 @@ export function mountOrderDetailView(container, orderId) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
-            const res = await washnoteApi.updateVehicleStatus(vehicleId, {
-                status_proses: nextStatus,
-                expected_version: order.version,
-            });
+            const res = await washnoteApi.updateVehicleStatus(
+                vehicleId,
+                {
+                    status_proses: nextStatus,
+                    expected_version: order.version,
+                },
+                { signal: abortController.signal }
+            );
+            if (isDisposed) {
+                return;
+            }
             showToast(res?.message || 'Status kendaraan diperbarui.', 'success');
             await loadOrder();
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             if (err.status === 409 && err.errorCode === 'VERSION_CONFLICT') {
                 showToast('Pesanan baru saja diubah oleh pengguna lain. Data dimuat ulang.', 'info');
                 await loadOrder();
@@ -145,12 +172,14 @@ export function mountOrderDetailView(container, orderId) {
             errorObj = err;
         } finally {
             isSubmitting = false;
-            render();
+            if (!isDisposed && !wasAborted) {
+                render();
+            }
         }
     }
 
     async function handleOrderEditSubmit() {
-        if (isSubmitting || !order) {
+        if (isDisposed || isSubmitting || !order) {
             return;
         }
 
@@ -159,6 +188,7 @@ export function mountOrderDetailView(container, orderId) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
             const payload = {
                 expected_version: order.version,
@@ -188,12 +218,19 @@ export function mountOrderDetailView(container, orderId) {
                 }),
             };
 
-            const res = await washnoteApi.updateOrder(order.id_pesanan, payload);
+            const res = await washnoteApi.updateOrder(order.id_pesanan, payload, { signal: abortController.signal });
+            if (isDisposed) {
+                return;
+            }
             editAlasan = '';
             showToast(res?.message || 'Pesanan berhasil diperbarui.', 'success');
             activeTab = 'detail';
             await loadOrder();
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             if (err.status === 409 && err.errorCode === 'VERSION_CONFLICT') {
                 showToast('Pesanan berubah karena pembaruan lain. Data terbaru dimuat ulang.', 'info');
                 await loadOrder();
@@ -202,15 +239,17 @@ export function mountOrderDetailView(container, orderId) {
             errorObj = err;
         } finally {
             isSubmitting = false;
-            render();
-            if (errorObj && container.querySelector('[data-inline-error="true"]')) {
-                scrollToElement('[data-inline-error="true"]');
+            if (!isDisposed && !wasAborted) {
+                render();
+                if (errorObj && container.querySelector('[data-inline-error="true"]')) {
+                    scrollToElement('[data-inline-error="true"]');
+                }
             }
         }
     }
 
     async function handlePaymentSubmit() {
-        if (isSubmitting || !order) {
+        if (isDisposed || isSubmitting || !order) {
             return;
         }
 
@@ -221,6 +260,7 @@ export function mountOrderDetailView(container, orderId) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
             const res = await washnoteApi.storePayment(
                 order.id_pesanan,
@@ -228,8 +268,12 @@ export function mountOrderDetailView(container, orderId) {
                     metode_pembayaran: method,
                     jumlah_dibayar: amount,
                 },
-                paymentIdempotencyKey
+                paymentIdempotencyKey,
+                { signal: abortController.signal }
             );
+            if (isDisposed) {
+                return;
+            }
             paymentIdempotencyKey = generateIdempotencyKey();
             showToast(
                 `${res?.message || 'Pembayaran tercatat.'} Kembalian: ${formatRupiah(res?.kembalian ?? 0)}`,
@@ -237,15 +281,21 @@ export function mountOrderDetailView(container, orderId) {
             );
             await loadOrder();
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isSubmitting = false;
-            render();
+            if (!isDisposed && !wasAborted) {
+                render();
+            }
         }
     }
 
     async function handleCancelSubmit() {
-        if (isSubmitting || !order) {
+        if (isDisposed || isSubmitting || !order) {
             return;
         }
 
@@ -258,16 +308,28 @@ export function mountOrderDetailView(container, orderId) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
-            const res = await washnoteApi.cancelOrder(order.id_pesanan, {
-                alasan_pembatalan: cancelReason.trim(),
-                expected_version: order.version,
-            });
+            const res = await washnoteApi.cancelOrder(
+                order.id_pesanan,
+                {
+                    alasan_pembatalan: cancelReason.trim(),
+                    expected_version: order.version,
+                },
+                { signal: abortController.signal }
+            );
+            if (isDisposed) {
+                return;
+            }
             cancelReason = '';
             showToast(res?.message || 'Pesanan dibatalkan.', 'success');
             activeTab = 'detail';
             await loadOrder();
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             if (err.status === 409 && err.errorCode === 'VERSION_CONFLICT') {
                 showToast('Pesanan baru diperbarui pengguna lain. Data dimuat ulang.', 'info');
                 await loadOrder();
@@ -276,7 +338,9 @@ export function mountOrderDetailView(container, orderId) {
             errorObj = err;
         } finally {
             isSubmitting = false;
-            render();
+            if (!isDisposed && !wasAborted) {
+                render();
+            }
         }
     }
 
@@ -309,6 +373,9 @@ export function mountOrderDetailView(container, orderId) {
     }
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         if (isLoading && !order) {
             container.innerHTML = `
                 <div data-motion-state class="flex items-center justify-center gap-2 rounded-2xl border border-border-subtle bg-surface p-12 text-sm text-ink-muted">
@@ -358,7 +425,7 @@ export function mountOrderDetailView(container, orderId) {
 
                 ${errorObj ? (parsedOrderErr ? renderOrderErrorSummary(parsedOrderErr) : renderErrorAlert(errorObj)) : ''}
 
-                <div class="flex flex-wrap gap-2 border-b border-border-subtle pb-2">
+                <div role="tablist" aria-label="Bagian detail pesanan" class="flex flex-wrap gap-2 border-b border-border-subtle pb-2">
                     ${[
                         ['detail', 'Status & Rincian'],
                         ['edit', 'Edit Pesanan'],
@@ -367,8 +434,10 @@ export function mountOrderDetailView(container, orderId) {
                     ].map(([tabId, label]) => `
                         <button
                             type="button"
+                            role="tab"
+                            aria-selected="${activeTab === tabId ? 'true' : 'false'}"
                             data-detail-tab="${tabId}"
-                            class="min-h-[38px] rounded-xl px-3.5 py-2 text-xs font-semibold transition active:scale-[0.985] ${
+                            class="min-h-[40px] sm:min-h-[38px] rounded-xl px-3.5 py-2 text-xs font-semibold transition active:scale-[0.985] ${
                                 activeTab === tabId ? 'bg-brand-navy text-white shadow-xs' : 'bg-surface text-ink-muted ring-1 ring-border-subtle hover:bg-app-bg hover:text-ink'
                             }"
                         >
@@ -793,4 +862,9 @@ export function mountOrderDetailView(container, orderId) {
     }
 
     loadOrder();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }

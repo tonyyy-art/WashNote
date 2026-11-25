@@ -7,7 +7,9 @@ use App\Models\HargaLayanan;
 use App\Models\KategoriKendaraan;
 use App\Models\Layanan;
 use App\Models\Pengguna;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class Phase3PricingAndAddOnsTest extends TestCase
@@ -380,6 +382,273 @@ class Phase3PricingAndAddOnsTest extends TestCase
             ->assertJsonPath('data.subtotal_utama', 57500)
             ->assertJsonPath('data.subtotal_tambahan', 10000)
             ->assertJsonPath('data.total_harga', 67500);
+    }
+
+    public function test_multi_vehicle_order_store_and_update_preload_categories_and_tariffs_without_n_plus_one(): void
+    {
+        $kasir = $this->createUser('kasir');
+        $kasirToken = $kasir->createToken('kasir')->plainTextToken;
+
+        [$kategoriSedan, , $tarifSedanUtama] = $this->seedTariff(
+            namaKategori: 'Sedan Batch',
+            namaLayanan: 'Cuci Salju Batch',
+            tipeLayanan: 'utama',
+            hargaDasar: 35000,
+            batasBawah: 30000,
+            batasAtas: 45000,
+        );
+
+        [, , $tarifSedanAddon] = $this->seedTariff(
+            namaKategori: 'Sedan Batch',
+            namaLayanan: 'Fogging Batch',
+            tipeLayanan: 'tambahan',
+            hargaDasar: 15000,
+            batasBawah: 10000,
+            batasAtas: 20000,
+            kategoriOverride: $kategoriSedan,
+        );
+
+        [$kategoriMpv, , $tarifMpvUtama] = $this->seedTariff(
+            namaKategori: 'MPV Batch',
+            namaLayanan: 'Cuci Salju MPV',
+            tipeLayanan: 'utama',
+            hargaDasar: 45000,
+            batasBawah: 40000,
+            batasAtas: 55000,
+        );
+
+        $singleVehiclePayload = [
+            'kendaraan' => [
+                [
+                    'id_kategori_kendaraan' => $kategoriSedan->id_kategori_kendaraan,
+                    'plat_nomor' => 'B9001AA',
+                    'layanan' => [
+                        ['id_harga' => $tarifSedanUtama->id_harga],
+                    ],
+                ],
+            ],
+        ];
+
+        $multiVehiclePayload = [
+            'kendaraan' => [
+                [
+                    'id_kategori_kendaraan' => $kategoriSedan->id_kategori_kendaraan,
+                    'plat_nomor' => 'B1001AA',
+                    'layanan' => [
+                        ['id_harga' => $tarifSedanUtama->id_harga],
+                        ['id_harga' => $tarifSedanAddon->id_harga],
+                    ],
+                ],
+                [
+                    'id_kategori_kendaraan' => $kategoriMpv->id_kategori_kendaraan,
+                    'plat_nomor' => 'B1002BB',
+                    'layanan' => [
+                        ['id_harga' => $tarifMpvUtama->id_harga],
+                    ],
+                ],
+                [
+                    'id_kategori_kendaraan' => $kategoriSedan->id_kategori_kendaraan,
+                    'plat_nomor' => 'B1003CC',
+                    'layanan' => [
+                        ['id_harga' => $tarifSedanUtama->id_harga],
+                        ['id_harga' => $tarifSedanAddon->id_harga],
+                    ],
+                ],
+                [
+                    'id_kategori_kendaraan' => $kategoriMpv->id_kategori_kendaraan,
+                    'plat_nomor' => 'B1004DD',
+                    'layanan' => [
+                        ['id_harga' => $tarifMpvUtama->id_harga],
+                    ],
+                ],
+                [
+                    'id_kategori_kendaraan' => $kategoriSedan->id_kategori_kendaraan,
+                    'plat_nomor' => 'B1005EE',
+                    'layanan' => [
+                        ['id_harga' => $tarifSedanUtama->id_harga],
+                        ['id_harga' => $tarifSedanAddon->id_harga],
+                    ],
+                ],
+            ],
+        ];
+
+        $countEntitySelects = static function (array $queryLog, string $table): int {
+            return collect($queryLog)
+                ->pluck('query')
+                ->filter(static fn (string $sql): bool => str_contains(strtolower($sql), 'select ')
+                    && ! str_contains(strtolower($sql), 'count(')
+                    && str_contains($sql, $table))
+                ->count();
+        };
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $this->withToken($kasirToken)->postJson('/api/pesanan', $singleVehiclePayload)->assertStatus(201);
+        $singleStoreLog = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $created = $this->withToken($kasirToken)
+            ->postJson('/api/pesanan', $multiVehiclePayload)
+            ->assertStatus(201);
+        $multiStoreLog = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $this->assertSame(
+            $countEntitySelects($singleStoreLog, 'kategori_kendaraan'),
+            $countEntitySelects($multiStoreLog, 'kategori_kendaraan')
+        );
+        $this->assertSame(
+            $countEntitySelects($singleStoreLog, 'harga_layanan'),
+            $countEntitySelects($multiStoreLog, 'harga_layanan')
+        );
+        $this->assertLessThanOrEqual(2, $countEntitySelects($multiStoreLog, 'kategori_kendaraan'));
+        $this->assertLessThanOrEqual(2, $countEntitySelects($multiStoreLog, 'harga_layanan'));
+
+        $orderId = $created->json('data.pesanan.id_pesanan');
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $this->withToken($kasirToken)
+            ->putJson("/api/pesanan/{$orderId}", [
+                ...$singleVehiclePayload,
+                'alasan' => 'Ubah menjadi satu kendaraan',
+            ])
+            ->assertStatus(200);
+        $singleUpdateLog = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        $this->withToken($kasirToken)
+            ->putJson("/api/pesanan/{$orderId}", [
+                ...$multiVehiclePayload,
+                'alasan' => 'Ubah kembali ke multi kendaraan',
+            ])
+            ->assertStatus(200);
+        $multiUpdateLog = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $this->assertSame(
+            $countEntitySelects($singleUpdateLog, 'kategori_kendaraan'),
+            $countEntitySelects($multiUpdateLog, 'kategori_kendaraan')
+        );
+        $this->assertSame(
+            $countEntitySelects($singleUpdateLog, 'harga_layanan'),
+            $countEntitySelects($multiUpdateLog, 'harga_layanan')
+        );
+        $this->assertLessThanOrEqual(3, $countEntitySelects($multiUpdateLog, 'kategori_kendaraan'));
+        $this->assertLessThanOrEqual(3, $countEntitySelects($multiUpdateLog, 'harga_layanan'));
+    }
+
+    public function test_daily_financial_report_rejects_excessive_date_range_and_groups_multi_day_totals_accurately(): void
+    {
+        $owner = $this->createUser('owner');
+        $ownerToken = $owner->createToken('owner')->plainTextToken;
+        $kasir = $this->createUser('kasir');
+        $kasirToken = $kasir->createToken('kasir')->plainTextToken;
+
+        $this->withToken($ownerToken)
+            ->getJson('/api/laporan/harian?tanggal_mulai=2025-01-01&tanggal_akhir=2026-01-05')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['tanggal_akhir']);
+
+        [, , $tarif] = $this->seedTariff(
+            namaKategori: 'SUV Daily',
+            namaLayanan: 'Cuci Komplit Daily',
+            tipeLayanan: 'utama',
+            hargaDasar: 40000,
+            batasBawah: 35000,
+            batasAtas: 50000,
+        );
+
+        $expCatId = $this->withToken($ownerToken)
+            ->postJson('/api/kategori-pengeluaran', [
+                'nama_kategori' => 'Operasional Harian Test',
+                'status_aktif' => true,
+            ])
+            ->assertStatus(201)
+            ->json('data.id_kategori_pengeluaran');
+
+        config([
+            'app.timezone' => 'Asia/Jakarta',
+            'washnote.business_timezone' => 'Asia/Jakarta',
+        ]);
+
+        try {
+            Carbon::setTestNow(Carbon::parse('2026-11-20 10:00:00', 'Asia/Jakarta'));
+
+            $order1Id = $this->withToken($kasirToken)->postJson('/api/pesanan', [
+                'kendaraan' => [
+                    [
+                        'id_kategori_kendaraan' => $tarif->id_kategori_kendaraan,
+                        'layanan' => [['id_harga' => $tarif->id_harga]],
+                    ],
+                ],
+            ])->assertStatus(201)->json('data.pesanan.id_pesanan');
+
+            $this->withToken($kasirToken)->postJson("/api/pesanan/{$order1Id}/pembayaran", [
+                'jumlah_dibayar' => 40000,
+                'metode_pembayaran' => 'tunai',
+            ])->assertStatus(200);
+
+            Carbon::setTestNow(Carbon::parse('2026-11-21 14:30:00', 'Asia/Jakarta'));
+
+            $order2Id = $this->withToken($kasirToken)->postJson('/api/pesanan', [
+                'kendaraan' => [
+                    [
+                        'id_kategori_kendaraan' => $tarif->id_kategori_kendaraan,
+                        'layanan' => [['id_harga' => $tarif->id_harga]],
+                    ],
+                    [
+                        'id_kategori_kendaraan' => $tarif->id_kategori_kendaraan,
+                        'layanan' => [['id_harga' => $tarif->id_harga]],
+                    ],
+                ],
+            ])->assertStatus(201)->json('data.pesanan.id_pesanan');
+
+            $this->withToken($kasirToken)->postJson("/api/pesanan/{$order2Id}/pembayaran", [
+                'jumlah_dibayar' => 80000,
+                'metode_pembayaran' => 'qris',
+            ])->assertStatus(200);
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $this->withToken($ownerToken)->postJson('/api/pengeluaran', [
+            'id_kategori_pengeluaran' => $expCatId,
+            'tanggal_pengeluaran' => '2026-11-20',
+            'deskripsi' => 'Sabun cuci day 1',
+            'nominal' => 15000,
+        ])->assertStatus(201);
+
+        $this->withToken($ownerToken)->postJson('/api/pengeluaran', [
+            'id_kategori_pengeluaran' => $expCatId,
+            'tanggal_pengeluaran' => '2026-11-21',
+            'deskripsi' => 'Listrik day 2',
+            'nominal' => 25000,
+        ])->assertStatus(201);
+
+        $this->app['auth']->forgetGuards();
+
+        $daily = $this->withToken($ownerToken)
+            ->getJson('/api/laporan/harian?tanggal_mulai=2026-11-20&tanggal_akhir=2026-11-21')
+            ->assertStatus(200);
+
+        $this->assertCount(2, $daily->json('data'));
+        $daily->assertJsonPath('data.0.tanggal', '2026-11-20')
+            ->assertJsonPath('data.0.jumlah_kendaraan', 1)
+            ->assertJsonPath('data.1.tanggal', '2026-11-21')
+            ->assertJsonPath('data.1.jumlah_kendaraan', 2);
+
+        $this->assertEquals(40000.0, (float) $daily->json('data.0.pendapatan'));
+        $this->assertEquals(15000.0, (float) $daily->json('data.0.pengeluaran'));
+        $this->assertEquals(25000.0, (float) $daily->json('data.0.keuntungan_bersih'));
+
+        $this->assertEquals(80000.0, (float) $daily->json('data.1.pendapatan'));
+        $this->assertEquals(25000.0, (float) $daily->json('data.1.pengeluaran'));
+        $this->assertEquals(55000.0, (float) $daily->json('data.1.keuntungan_bersih'));
     }
 
     private function createUser(string $role): Pengguna

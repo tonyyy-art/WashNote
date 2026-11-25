@@ -169,6 +169,8 @@ function getMobileHeaderLabel() {
     }
 }
 
+let cleanupActiveView = null;
+
 async function handleLogout() {
     try {
         await washnoteApi.logout();
@@ -182,6 +184,10 @@ async function handleLogout() {
 }
 
 function cleanupShellLifecycle() {
+    if (typeof cleanupActiveView === 'function') {
+        cleanupActiveView();
+        cleanupActiveView = null;
+    }
     cleanupViewMotion();
     destroySmoothScroll();
     mountedShellRole = null;
@@ -409,48 +415,53 @@ function mountActiveView() {
         return;
     }
 
+    if (typeof cleanupActiveView === 'function') {
+        cleanupActiveView();
+        cleanupActiveView = null;
+    }
+
     cleanupViewMotion();
     scrollToPageTop();
 
     switch (state.activeView) {
         case APP_VIEWS.DASHBOARD:
-            mountDashboardView(outlet);
+            cleanupActiveView = mountDashboardView(outlet);
             break;
         case APP_VIEWS.ORDER_CREATE:
-            mountOrderCreateView(outlet);
+            cleanupActiveView = mountOrderCreateView(outlet);
             break;
         case APP_VIEWS.ORDERS:
-            mountOrdersListView(outlet);
+            cleanupActiveView = mountOrdersListView(outlet);
             break;
         case APP_VIEWS.ORDER_DETAIL:
-            mountOrderDetailView(outlet, state.selectedOrderId);
+            cleanupActiveView = mountOrderDetailView(outlet, state.selectedOrderId);
             break;
         case APP_VIEWS.OPERATING_HOURS:
-            mountOperatingHoursView(outlet);
+            cleanupActiveView = mountOperatingHoursView(outlet);
             break;
         case APP_VIEWS.OWNER_CATALOG:
-            mountOwnerCatalogView(outlet);
+            cleanupActiveView = mountOwnerCatalogView(outlet);
             break;
         case APP_VIEWS.OWNER_STAFF:
-            mountOwnerStaffView(outlet);
+            cleanupActiveView = mountOwnerStaffView(outlet);
             break;
         case APP_VIEWS.OWNER_EXPENSES:
-            mountOwnerExpensesView(outlet);
+            cleanupActiveView = mountOwnerExpensesView(outlet);
             break;
         case APP_VIEWS.OWNER_EXPENSE_CATEGORIES:
-            mountOwnerExpenseCategoriesView(outlet);
+            cleanupActiveView = mountOwnerExpenseCategoriesView(outlet);
             break;
         case APP_VIEWS.OWNER_REPORTS:
-            mountOwnerReportsView(outlet);
+            cleanupActiveView = mountOwnerReportsView(outlet);
             break;
         case APP_VIEWS.OWNER_AUDIT:
-            mountOwnerAuditView(outlet);
+            cleanupActiveView = mountOwnerAuditView(outlet);
             break;
         case APP_VIEWS.PROFILE:
-            mountProfileView(outlet, () => renderApp());
+            cleanupActiveView = mountProfileView(outlet, () => renderApp());
             break;
         default:
-            mountDashboardView(outlet);
+            cleanupActiveView = mountDashboardView(outlet);
     }
 }
 
@@ -505,7 +516,7 @@ function renderApp() {
     if (!state.token || !state.user) {
         cleanupShellLifecycle();
         initSmoothScroll();
-        mountLoginView(rootEl, state.authNotice, () => {
+        cleanupActiveView = mountLoginView(rootEl, state.authNotice, () => {
             const initial = resolveViewFromPath(window.location.pathname, window.location.search);
             navigateTo(initial.view, { ...initial.options, replaceUrl: true });
         });

@@ -1,4 +1,4 @@
-import { washnoteApi } from '../api/client.js';
+import { isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
 import { APP_VIEWS, navigateBack, showToast } from '../state/store.js';
 import {
@@ -13,6 +13,8 @@ import {
 
 export function mountOwnerCatalogView(container) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let activeTab = 'categories';
     let isLoading = true;
     let isSubmitting = false;
@@ -30,26 +32,40 @@ export function mountOwnerCatalogView(container) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
             const [catRes, srvRes, tarRes] = await Promise.all([
-                washnoteApi.getVehicleCategories(),
-                washnoteApi.getServices(),
-                washnoteApi.getTariffs(),
+                washnoteApi.getVehicleCategories({ signal: abortController.signal }),
+                washnoteApi.getServices({}, { signal: abortController.signal }),
+                washnoteApi.getTariffs({ signal: abortController.signal }),
             ]);
+
+            if (isDisposed) {
+                return;
+            }
 
             categories = catRes?.data || [];
             services = srvRes?.data || [];
             tariffs = tarRes?.data || [];
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isLoading = false;
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         const hasAnyData = categories.length > 0 || services.length > 0 || tariffs.length > 0;
 
         container.innerHTML = `
@@ -61,13 +77,13 @@ export function mountOwnerCatalogView(container) {
 
                 ${errorObj && hasAnyData ? renderErrorAlert(errorObj) : ''}
 
-                <div class="flex flex-wrap gap-2 border-b border-border-subtle pb-2">
+                <div role="tablist" aria-label="Kategori data katalog" class="flex flex-wrap gap-2 border-b border-border-subtle pb-2">
                     ${[
                         ['categories', `Kategori Kendaraan (${categories.length})`],
                         ['services', `Layanan (${services.length})`],
                         ['tariffs', `Tarif & Batas Harga (${tariffs.length})`],
                     ].map(([tab, label]) => `
-                        <button type="button" data-cat-tab="${tab}" class="min-h-[38px] rounded-lg px-3.5 py-2 text-xs font-semibold transition active:scale-[0.985] ${activeTab === tab ? 'bg-brand-navy text-white shadow-xs' : 'bg-surface text-ink-muted ring-1 ring-border-subtle hover:bg-app-bg hover:text-ink'}">
+                        <button type="button" role="tab" aria-selected="${activeTab === tab ? 'true' : 'false'}" data-cat-tab="${tab}" class="min-h-[40px] sm:min-h-[38px] rounded-lg px-3.5 py-2 text-xs font-semibold transition active:scale-[0.985] ${activeTab === tab ? 'bg-brand-navy text-white shadow-xs' : 'bg-surface text-ink-muted ring-1 ring-border-subtle hover:bg-app-bg hover:text-ink'}">
                             ${escapeHtml(label)}
                         </button>
                     `).join('')}
@@ -119,8 +135,8 @@ export function mountOwnerCatalogView(container) {
                                         ${badgeStatusAktif(Boolean(cat.status_aktif))}
                                     </div>
                                     <div class="flex flex-wrap gap-2">
-                                        <button type="button" data-edit-cat-row="${cat.id_kategori_kendaraan}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
-                                        ${cat.status_aktif ? `<button type="button" data-del-cat-row="${cat.id_kategori_kendaraan}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
+                                        <button type="button" data-edit-cat-row="${cat.id_kategori_kendaraan}" class="wn-link inline-flex min-h-[40px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
+                                        ${cat.status_aktif ? `<button type="button" data-del-cat-row="${cat.id_kategori_kendaraan}" ${isSubmitting ? 'disabled' : ''} class="inline-flex min-h-[40px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-55">Nonaktifkan</button>` : ''}
                                     </div>
                                 </div>
                             `).join('')}
@@ -143,7 +159,7 @@ export function mountOwnerCatalogView(container) {
                                             <td class="px-4 py-3">${badgeStatusAktif(Boolean(cat.status_aktif))}</td>
                                             <td class="px-4 py-3 text-right space-x-2.5">
                                                 <button type="button" data-edit-cat-row="${cat.id_kategori_kendaraan}" class="wn-link text-xs">Ubah</button>
-                                                ${cat.status_aktif ? `<button type="button" data-del-cat-row="${cat.id_kategori_kendaraan}" class="text-xs font-semibold text-danger hover:text-red-800">Nonaktifkan</button>` : ''}
+                                                ${cat.status_aktif ? `<button type="button" data-del-cat-row="${cat.id_kategori_kendaraan}" ${isSubmitting ? 'disabled' : ''} class="text-xs font-semibold text-danger hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-55">Nonaktifkan</button>` : ''}
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -169,7 +185,7 @@ export function mountOwnerCatalogView(container) {
                         <label for="cat-nama" class="wn-label">Nama Kategori <span class="text-danger">*</span></label>
                         <input id="cat-nama" type="text" required value="${escapeHtml(editing?.nama_kategori || '')}" placeholder="Mis. Motor Besar / Mobil SUV" class="wn-input" />
                     </div>
-                    <label class="flex items-center gap-2 text-xs text-ink">
+                    <label for="cat-aktif" class="flex min-h-[40px] sm:min-h-[32px] items-center gap-2 text-xs text-ink">
                         <input id="cat-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="wn-checkbox" />
                         <span>Status Aktif</span>
                     </label>
@@ -207,8 +223,8 @@ export function mountOwnerCatalogView(container) {
                                     <div class="flex flex-wrap items-center justify-between gap-2">
                                         ${badgeStatusAktif(Boolean(srv.status_aktif))}
                                         <div class="flex flex-wrap gap-2">
-                                            <button type="button" data-edit-srv-row="${srv.id_layanan}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
-                                            ${srv.status_aktif ? `<button type="button" data-del-srv-row="${srv.id_layanan}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
+                                            <button type="button" data-edit-srv-row="${srv.id_layanan}" class="wn-link inline-flex min-h-[40px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
+                                            ${srv.status_aktif ? `<button type="button" data-del-srv-row="${srv.id_layanan}" ${isSubmitting ? 'disabled' : ''} class="inline-flex min-h-[40px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-55">Nonaktifkan</button>` : ''}
                                         </div>
                                     </div>
                                 </div>
@@ -237,7 +253,7 @@ export function mountOwnerCatalogView(container) {
                                             <td class="px-4 py-3">${badgeStatusAktif(Boolean(srv.status_aktif))}</td>
                                             <td class="px-4 py-3 text-right space-x-2.5">
                                                 <button type="button" data-edit-srv-row="${srv.id_layanan}" class="wn-link text-xs">Ubah</button>
-                                                ${srv.status_aktif ? `<button type="button" data-del-srv-row="${srv.id_layanan}" class="text-xs font-semibold text-danger hover:text-red-800">Nonaktifkan</button>` : ''}
+                                                ${srv.status_aktif ? `<button type="button" data-del-srv-row="${srv.id_layanan}" ${isSubmitting ? 'disabled' : ''} class="text-xs font-semibold text-danger hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-55">Nonaktifkan</button>` : ''}
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -267,7 +283,7 @@ export function mountOwnerCatalogView(container) {
                         <label for="srv-desk" class="wn-label">Deskripsi (Opsional)</label>
                         <input id="srv-desk" type="text" value="${escapeHtml(editing?.deskripsi || '')}" class="wn-input" />
                     </div>
-                    <label class="flex items-center gap-2 text-xs text-ink">
+                    <label for="srv-aktif" class="flex min-h-[40px] sm:min-h-[32px] items-center gap-2 text-xs text-ink">
                         <input id="srv-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="wn-checkbox" />
                         <span>Status Aktif</span>
                     </label>
@@ -310,8 +326,8 @@ export function mountOwnerCatalogView(container) {
                                         <span class="text-ink-muted tabular-nums">Rentang: ${escapeHtml(formatRupiah(tar.batas_bawah))} – ${escapeHtml(formatRupiah(tar.batas_atas))}</span>
                                     </div>
                                     <div class="flex flex-wrap gap-2">
-                                        <button type="button" data-edit-tar-row="${tar.id_harga}" class="wn-link inline-flex min-h-[34px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
-                                        ${tar.status_aktif ? `<button type="button" data-del-tar-row="${tar.id_harga}" class="inline-flex min-h-[34px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100">Nonaktifkan</button>` : ''}
+                                        <button type="button" data-edit-tar-row="${tar.id_harga}" class="wn-link inline-flex min-h-[40px] items-center rounded-md border border-accent-border bg-accent-soft px-3 text-xs">Ubah</button>
+                                        ${tar.status_aktif ? `<button type="button" data-del-tar-row="${tar.id_harga}" ${isSubmitting ? 'disabled' : ''} class="inline-flex min-h-[40px] items-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-semibold text-danger hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-55">Nonaktifkan</button>` : ''}
                                     </div>
                                 </div>
                             `).join('')}
@@ -339,7 +355,7 @@ export function mountOwnerCatalogView(container) {
                                             <td class="px-4 py-3">${badgeStatusAktif(Boolean(tar.status_aktif))}</td>
                                             <td class="px-4 py-3 text-right space-x-2.5">
                                                 <button type="button" data-edit-tar-row="${tar.id_harga}" class="wn-link text-xs">Ubah</button>
-                                                ${tar.status_aktif ? `<button type="button" data-del-tar-row="${tar.id_harga}" class="text-xs font-semibold text-danger hover:text-red-800">Nonaktifkan</button>` : ''}
+                                                ${tar.status_aktif ? `<button type="button" data-del-tar-row="${tar.id_harga}" ${isSubmitting ? 'disabled' : ''} class="text-xs font-semibold text-danger hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-55">Nonaktifkan</button>` : ''}
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -393,7 +409,7 @@ export function mountOwnerCatalogView(container) {
                                 <input id="tar-max" type="number" min="0" required value="${escapeHtml(editing ? Number(editing.batas_atas) : '')}" class="wn-input tabular-nums" />
                             </div>
                         </div>
-                        <label class="flex items-center gap-2 text-xs text-ink">
+                        <label for="tar-aktif" class="flex min-h-[40px] sm:min-h-[32px] items-center gap-2 text-xs text-ink">
                             <input id="tar-aktif" type="checkbox" ${(editing ? editing.status_aktif : true) ? 'checked' : ''} class="wn-checkbox" />
                             <span>Status Aktif</span>
                         </label>
@@ -438,11 +454,26 @@ export function mountOwnerCatalogView(container) {
         );
         container.querySelectorAll('[data-del-cat-row]').forEach((b) =>
             b.addEventListener('click', async () => {
+                if (isDisposed || isSubmitting) {
+                    return;
+                }
+                isSubmitting = true;
+                errorObj = null;
+                render();
+
                 try {
-                    await washnoteApi.deleteVehicleCategory(Number(b.getAttribute('data-del-cat-row')));
+                    await washnoteApi.deleteVehicleCategory(Number(b.getAttribute('data-del-cat-row')), { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
+                    isSubmitting = false;
                     showToast('Kategori dinonaktifkan.', 'success');
                     await loadCatalogMaster();
                 } catch (err) {
+                    if (isDisposed || isAbortError(err)) {
+                        return;
+                    }
+                    isSubmitting = false;
                     errorObj = err;
                     render();
                 }
@@ -451,6 +482,9 @@ export function mountOwnerCatalogView(container) {
 
         container.querySelector('#cat-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const payload = {
                 jenis_kendaraan: container.querySelector('#cat-jenis')?.value,
                 nama_kategori: container.querySelector('#cat-nama')?.value?.trim(),
@@ -461,16 +495,25 @@ export function mountOwnerCatalogView(container) {
             render();
             try {
                 if (editingCatId) {
-                    await washnoteApi.updateVehicleCategory(editingCatId, payload);
+                    await washnoteApi.updateVehicleCategory(editingCatId, payload, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Kategori diperbarui.', 'success');
                     editingCatId = null;
                 } else {
-                    await washnoteApi.createVehicleCategory(payload);
+                    await washnoteApi.createVehicleCategory(payload, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Kategori ditambahkan.', 'success');
                 }
                 isSubmitting = false;
                 await loadCatalogMaster();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -486,11 +529,26 @@ export function mountOwnerCatalogView(container) {
         );
         container.querySelectorAll('[data-del-srv-row]').forEach((b) =>
             b.addEventListener('click', async () => {
+                if (isDisposed || isSubmitting) {
+                    return;
+                }
+                isSubmitting = true;
+                errorObj = null;
+                render();
+
                 try {
-                    await washnoteApi.deleteService(Number(b.getAttribute('data-del-srv-row')));
+                    await washnoteApi.deleteService(Number(b.getAttribute('data-del-srv-row')), { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
+                    isSubmitting = false;
                     showToast('Layanan dinonaktifkan.', 'success');
                     await loadCatalogMaster();
                 } catch (err) {
+                    if (isDisposed || isAbortError(err)) {
+                        return;
+                    }
+                    isSubmitting = false;
                     errorObj = err;
                     render();
                 }
@@ -499,6 +557,9 @@ export function mountOwnerCatalogView(container) {
 
         container.querySelector('#srv-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const payload = {
                 nama_layanan: container.querySelector('#srv-nama')?.value?.trim(),
                 tipe_layanan: container.querySelector('#srv-tipe')?.value,
@@ -510,16 +571,25 @@ export function mountOwnerCatalogView(container) {
             render();
             try {
                 if (editingSrvId) {
-                    await washnoteApi.updateService(editingSrvId, payload);
+                    await washnoteApi.updateService(editingSrvId, payload, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Layanan diperbarui.', 'success');
                     editingSrvId = null;
                 } else {
-                    await washnoteApi.createService(payload);
+                    await washnoteApi.createService(payload, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Layanan ditambahkan.', 'success');
                 }
                 isSubmitting = false;
                 await loadCatalogMaster();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -535,11 +605,26 @@ export function mountOwnerCatalogView(container) {
         );
         container.querySelectorAll('[data-del-tar-row]').forEach((b) =>
             b.addEventListener('click', async () => {
+                if (isDisposed || isSubmitting) {
+                    return;
+                }
+                isSubmitting = true;
+                errorObj = null;
+                render();
+
                 try {
-                    await washnoteApi.deleteTariff(Number(b.getAttribute('data-del-tar-row')));
+                    await washnoteApi.deleteTariff(Number(b.getAttribute('data-del-tar-row')), { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
+                    isSubmitting = false;
                     showToast('Tarif dinonaktifkan.', 'success');
                     await loadCatalogMaster();
                 } catch (err) {
+                    if (isDisposed || isAbortError(err)) {
+                        return;
+                    }
+                    isSubmitting = false;
                     errorObj = err;
                     render();
                 }
@@ -548,6 +633,9 @@ export function mountOwnerCatalogView(container) {
 
         container.querySelector('#tar-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isDisposed || isSubmitting) {
+                return;
+            }
             const payload = {
                 id_layanan: Number(container.querySelector('#tar-layanan')?.value),
                 id_kategori_kendaraan: Number(container.querySelector('#tar-kat')?.value),
@@ -561,16 +649,25 @@ export function mountOwnerCatalogView(container) {
             render();
             try {
                 if (editingTariffId) {
-                    await washnoteApi.updateTariff(editingTariffId, payload);
+                    await washnoteApi.updateTariff(editingTariffId, payload, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Tarif diperbarui.', 'success');
                     editingTariffId = null;
                 } else {
-                    await washnoteApi.createTariff(payload);
+                    await washnoteApi.createTariff(payload, { signal: abortController.signal });
+                    if (isDisposed) {
+                        return;
+                    }
                     showToast('Tarif ditambahkan.', 'success');
                 }
                 isSubmitting = false;
                 await loadCatalogMaster();
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isSubmitting = false;
                 render();
@@ -579,4 +676,9 @@ export function mountOwnerCatalogView(container) {
     }
 
     loadCatalogMaster();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }

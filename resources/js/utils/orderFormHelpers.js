@@ -81,10 +81,7 @@ export function parseOrderValidationError(err, vehicles = [], catalog = {}, extr
     const tariffsPool = [...(catalog?.harga_layanan || []), ...(extraTariffs || [])];
     const rawErrors = err.errors && typeof err.errors === 'object' ? err.errors : null;
 
-    if (!rawErrors) {
-        if (err.message) {
-            result.summaryItems.push(err.message);
-        }
+    if (!rawErrors || Object.keys(rawErrors).length === 0) {
         return result;
     }
 
@@ -234,7 +231,7 @@ export function renderVehicleServiceCard({
                     </span>
                 </div>
                 ${totalVehicles > 1 ? `
-                    <button type="button" data-${prefix}-remove-veh="${vIdx}" class="inline-flex min-h-[34px] items-center rounded-lg px-2.5 text-xs font-semibold text-danger transition hover:bg-red-50">
+                    <button type="button" data-${prefix}-remove-veh="${vIdx}" class="inline-flex min-h-[40px] sm:min-h-[34px] items-center rounded-lg px-2.5 text-xs font-semibold text-danger transition hover:bg-red-50">
                         Hapus Kendaraan
                     </button>
                 ` : ''}
@@ -242,8 +239,8 @@ export function renderVehicleServiceCard({
 
             <div class="mt-4 grid gap-3.5 sm:grid-cols-2">
                 <div class="min-w-0">
-                    <label class="wn-label">Kategori Kendaraan <span class="text-danger">*</span></label>
-                    <select data-${prefix}-cat="${vIdx}" class="wn-select ${vehErr.id_kategori_kendaraan ? 'wn-select-error' : ''}">
+                    <label for="${prefix}-cat-${vIdx}" class="wn-label">Kategori Kendaraan <span class="text-danger">*</span></label>
+                    <select id="${prefix}-cat-${vIdx}" data-${prefix}-cat="${vIdx}" class="wn-select ${vehErr.id_kategori_kendaraan ? 'wn-select-error' : ''}">
                         ${categories.map((kat) => `
                             <option value="${kat.id_kategori_kendaraan}" ${Number(kat.id_kategori_kendaraan) === Number(veh.id_kategori_kendaraan) ? 'selected' : ''}>
                                 ${escapeHtml(kat.nama_kategori)} (${escapeHtml(kat.jenis_kendaraan)})
@@ -253,8 +250,9 @@ export function renderVehicleServiceCard({
                     ${vehErr.id_kategori_kendaraan ? `<p class="wn-error-inline">${iconSvg('alertCircle', 'mt-0.5 h-3.5 w-3.5')}<span>${escapeHtml(vehErr.id_kategori_kendaraan)}</span></p>` : ''}
                 </div>
                 <div class="min-w-0">
-                    <label class="wn-label">Plat Nomor <span class="font-normal text-ink-muted">(Opsional)</span></label>
+                    <label for="${prefix}-plat-${vIdx}" class="wn-label">Plat Nomor <span class="font-normal text-ink-muted">(Opsional)</span></label>
                     <input
+                        id="${prefix}-plat-${vIdx}"
                         type="text"
                         maxlength="20"
                         data-${prefix}-plat="${vIdx}"
@@ -277,8 +275,8 @@ export function renderVehicleServiceCard({
                 ` : `
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div class="min-w-0">
-                            <label class="wn-label">Tambah Layanan Utama</label>
-                            <select data-${prefix}-pick-main="${vIdx}" class="wn-select text-xs sm:text-sm" ${mainTariffs.length === 0 ? 'disabled' : ''}>
+                            <label for="${prefix}-pick-main-${vIdx}" class="wn-label">Tambah Layanan Utama</label>
+                            <select id="${prefix}-pick-main-${vIdx}" data-${prefix}-pick-main="${vIdx}" class="wn-select text-xs sm:text-sm" ${mainTariffs.length === 0 ? 'disabled' : ''}>
                                 <option value="">${mainTariffs.length > 0 ? '+ Pilih layanan utama...' : 'Tidak ada layanan utama'}</option>
                                 ${mainTariffs.map((t) => `
                                     <option value="${t.id_harga}">
@@ -289,8 +287,8 @@ export function renderVehicleServiceCard({
                         </div>
 
                         <div class="min-w-0">
-                            <label class="wn-label">Tambah Layanan Tambahan</label>
-                            <select data-${prefix}-pick-addon="${vIdx}" class="wn-select text-xs sm:text-sm" ${addOnTariffs.length === 0 ? 'disabled' : ''}>
+                            <label for="${prefix}-pick-addon-${vIdx}" class="wn-label">Tambah Layanan Tambahan</label>
+                            <select id="${prefix}-pick-addon-${vIdx}" data-${prefix}-pick-addon="${vIdx}" class="wn-select text-xs sm:text-sm" ${addOnTariffs.length === 0 ? 'disabled' : ''}>
                                 <option value="">${addOnTariffs.length > 0 ? '+ Pilih layanan tambahan...' : 'Tidak ada layanan tambahan'}</option>
                                 ${addOnTariffs.map((t) => `
                                     <option value="${t.id_harga}">
@@ -343,7 +341,7 @@ export function renderVehicleServiceCard({
                                                     <button
                                                         type="button"
                                                         data-${prefix}-toggle-price="${vIdx}-${lIdx}"
-                                                        class="inline-flex min-h-[34px] items-center rounded-lg border border-border-subtle bg-app-bg px-2.5 py-1 text-xs font-semibold text-ink transition hover:bg-slate-200/60"
+                                                        class="inline-flex min-h-[40px] sm:min-h-[34px] items-center rounded-lg border border-border-subtle bg-app-bg px-2.5 py-1 text-xs font-semibold text-ink transition hover:bg-slate-200/60"
                                                     >
                                                         ${isExpanded ? 'Tutup Harga' : 'Edit Harga'}
                                                     </button>
@@ -351,7 +349,7 @@ export function renderVehicleServiceCard({
                                                         <button
                                                             type="button"
                                                             data-${prefix}-remove-service="${vIdx}-${lIdx}"
-                                                            class="inline-flex min-h-[34px] items-center rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-danger transition hover:bg-red-100"
+                                                            class="inline-flex min-h-[40px] sm:min-h-[34px] items-center rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-danger transition hover:bg-red-100"
                                                         >
                                                             Hapus
                                                         </button>
@@ -364,10 +362,11 @@ export function renderVehicleServiceCard({
                                             <div class="border-t border-border-subtle bg-app-bg/70 px-3.5 py-3">
                                                 <div class="grid gap-3 sm:grid-cols-2">
                                                     <div class="min-w-0">
-                                                        <label class="wn-label">
+                                                        <label for="${prefix}-price-${vIdx}-${lIdx}" class="wn-label">
                                                             Harga Akhir (Rp) <span class="text-danger">*</span>
                                                         </label>
                                                         <input
+                                                            id="${prefix}-price-${vIdx}-${lIdx}"
                                                             type="number"
                                                             min="0"
                                                             step="1"
@@ -386,10 +385,11 @@ export function renderVehicleServiceCard({
                                                     </div>
 
                                                     <div class="min-w-0">
-                                                        <label class="wn-label">
+                                                        <label for="${prefix}-reason-${vIdx}-${lIdx}" class="wn-label">
                                                             Alasan Penyesuaian ${isAdjusted ? '<span class="text-danger">*</span> <span class="font-normal text-ink-muted">(Wajib)</span>' : '<span class="font-normal text-ink-muted">(Jika harga diubah)</span>'}
                                                         </label>
                                                         <input
+                                                            id="${prefix}-reason-${vIdx}-${lIdx}"
                                                             type="text"
                                                             data-${prefix}-reason="${vIdx}-${lIdx}"
                                                             value="${escapeHtml(line.alasan_penyesuaian || '')}"

@@ -1,10 +1,13 @@
-import { washnoteApi } from '../api/client.js';
+import { isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion } from '../motion/motionSystem.js';
 import { setAuthenticatedSession } from '../state/store.js';
 import { escapeHtml, iconSvg, renderErrorAlert } from '../utils/formatters.js';
 
 export function mountLoginView(container, authNotice, onLoggedIn) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
+    let loginTimeoutId = null;
     let isLoading = false;
     let verifiedRoleLabel = null;
     let errorObj = null;
@@ -12,6 +15,9 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
     let showPassword = false;
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         container.innerHTML = `
             <div class="flex min-h-screen flex-col justify-center bg-app-bg px-4 py-8 sm:px-6 sm:py-10">
                 <div class="mx-auto w-full max-w-md">
@@ -83,8 +89,9 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
                                     <button
                                         id="login-toggle-pass"
                                         type="button"
-                                        aria-label="Tampilkan atau sembunyikan kata sandi"
-                                        class="absolute inset-y-0 right-1 flex min-w-[36px] items-center justify-center text-ink-muted hover:text-ink"
+                                        aria-pressed="${showPassword ? 'true' : 'false'}"
+                                        aria-label="${showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}"
+                                        class="absolute inset-y-0 right-0.5 flex min-h-[44px] min-w-[44px] sm:min-h-[38px] sm:min-w-[38px] items-center justify-center text-ink-muted hover:text-ink"
                                     >
                                         ${iconSvg(showPassword ? 'eyeOff' : 'eye', 'h-4 w-4')}
                                     </button>
@@ -122,6 +129,8 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
                 passInput.type = showPassword ? 'text' : 'password';
             }
             if (toggleBtn) {
+                toggleBtn.setAttribute('aria-pressed', showPassword ? 'true' : 'false');
+                toggleBtn.setAttribute('aria-label', showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi');
                 toggleBtn.innerHTML = iconSvg(showPassword ? 'eyeOff' : 'eye', 'h-4 w-4');
             }
         });
@@ -163,7 +172,10 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
             render();
 
             try {
-                const res = await washnoteApi.login({ username, password });
+                const res = await washnoteApi.login({ username, password }, { signal: abortController.signal });
+                if (isDisposed) {
+                    return;
+                }
                 const token = res?.data?.token;
                 const user = res?.data?.user;
 
@@ -175,8 +187,16 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
                 isLoading = false;
                 verifiedRoleLabel = user.peran === 'owner' ? 'Owner' : 'Kasir';
                 render();
-                window.setTimeout(() => onLoggedIn(), 200);
+                loginTimeoutId = window.setTimeout(() => {
+                    loginTimeoutId = null;
+                    if (!isDisposed) {
+                        onLoggedIn();
+                    }
+                }, 200);
             } catch (err) {
+                if (isDisposed || isAbortError(err)) {
+                    return;
+                }
                 errorObj = err;
                 isLoading = false;
                 render();
@@ -191,4 +211,13 @@ export function mountLoginView(container, authNotice, onLoggedIn) {
 
     render();
     motion.runIntro();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+        if (loginTimeoutId !== null) {
+            window.clearTimeout(loginTimeoutId);
+            loginTimeoutId = null;
+        }
+    };
 }

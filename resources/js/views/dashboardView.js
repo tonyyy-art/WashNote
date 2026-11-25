@@ -1,4 +1,4 @@
-import { washnoteApi } from '../api/client.js';
+import { isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion } from '../motion/motionSystem.js';
 import { APP_VIEWS, isOwner, navigateTo, showToast } from '../state/store.js';
 import {
@@ -21,6 +21,8 @@ import {
 
 export function mountDashboardView(container) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let isLoading = true;
     let errorObj = null;
     let ordersPage = null;
@@ -37,40 +39,59 @@ export function mountDashboardView(container) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
             const today = todayWibDateString();
             const requests = [
-                washnoteApi.getOrders({
-                    scope: 'dashboard',
-                    search,
-                    status_pembayaran: paymentFilter,
-                    page: currentPage,
-                    per_page: 10,
-                }),
-                washnoteApi.getOperatingStatus(),
+                washnoteApi.getOrders(
+                    {
+                        scope: 'dashboard',
+                        search,
+                        status_pembayaran: paymentFilter,
+                        page: currentPage,
+                        per_page: 10,
+                    },
+                    { signal: abortController.signal }
+                ),
+                washnoteApi.getOperatingStatus({ signal: abortController.signal }),
             ];
 
             if (isOwner()) {
-                requests.push(washnoteApi.getReportSummary({ tanggal_mulai: today, tanggal_akhir: today }));
+                requests.push(
+                    washnoteApi.getReportSummary(
+                        { tanggal_mulai: today, tanggal_akhir: today },
+                        { signal: abortController.signal }
+                    )
+                );
             }
 
             const [ordersRes, statusRes, reportRes] = await Promise.all(requests);
+
+            if (isDisposed) {
+                return;
+            }
 
             ordersPage = ordersRes?.data || null;
             summary = ordersRes?.ringkasan || null;
             scheduleStatus = statusRes?.data || null;
             ownerTodayFinance = reportRes?.data || null;
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isLoading = false;
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
     async function handleVehicleStep(vehicleId, nextStatus, order) {
-        if (busyVehicleId !== null) {
+        if (isDisposed || busyVehicleId !== null) {
             return;
         }
 
@@ -86,10 +107,16 @@ export function mountDashboardView(container) {
                 payload.expected_version = order.version;
             }
 
-            const res = await washnoteApi.updateVehicleStatus(vehicleId, payload);
+            const res = await washnoteApi.updateVehicleStatus(vehicleId, payload, { signal: abortController.signal });
+            if (isDisposed) {
+                return;
+            }
             showToast(res?.message || 'Status kendaraan diperbarui.', 'success');
             await loadDashboard();
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                return;
+            }
             if (err.status === 409 && err.errorCode === 'VERSION_CONFLICT') {
                 showToast('Data antrean baru diperbarui oleh pengguna lain. Memuat ulang data terbaru.', 'info');
                 await loadDashboard();
@@ -98,7 +125,9 @@ export function mountDashboardView(container) {
             showToast(err.message || 'Gagal memperbarui status kendaraan.', 'error');
         } finally {
             busyVehicleId = null;
-            render();
+            if (!isDisposed) {
+                render();
+            }
         }
     }
 
@@ -199,6 +228,9 @@ export function mountDashboardView(container) {
     }
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         const items = ordersPage?.data || [];
         const hasFilter = search !== '' || paymentFilter !== '';
         const ownerMode = isOwner();
@@ -229,7 +261,7 @@ export function mountDashboardView(container) {
                             <button
                                 id="dash-hours-link"
                                 type="button"
-                                class="wn-btn-secondary min-h-[34px] w-full justify-between gap-1.5 px-3 py-1.5 text-xs sm:w-auto sm:justify-center"
+                                class="wn-btn-secondary min-h-[40px] sm:min-h-[34px] w-full justify-between gap-1.5 px-3 py-1.5 text-xs sm:w-auto sm:justify-center"
                             >
                                 <span>Jam Operasional</span>
                                 ${iconSvg('chevronRight', 'h-3.5 w-3.5 text-ink-muted')}
@@ -373,7 +405,7 @@ export function mountDashboardView(container) {
                             type="button"
                             data-open-order="${order.id_pesanan}"
                             data-open-tab="detail"
-                            class="wn-btn-secondary min-h-[36px] px-3 py-1.5 text-xs"
+                            class="wn-btn-secondary min-h-[40px] sm:min-h-[36px] px-3 py-1.5 text-xs"
                         >
                             Detail / Edit
                         </button>
@@ -382,7 +414,7 @@ export function mountDashboardView(container) {
                                 type="button"
                                 data-open-order="${order.id_pesanan}"
                                 data-open-tab="payment"
-                                class="wn-btn-primary min-h-[36px] px-3.5 py-1.5 text-xs"
+                                class="wn-btn-primary min-h-[40px] sm:min-h-[36px] px-3.5 py-1.5 text-xs"
                             >
                                 Bayar
                             </button>
@@ -420,7 +452,7 @@ export function mountDashboardView(container) {
                                                 data-veh-status="${targetStatus}"
                                                 data-order-id="${order.id_pesanan}"
                                                 ${isCurrent || isBusy ? 'disabled' : ''}
-                                                class="min-h-[34px] rounded-lg px-2.5 py-1 text-[11px] font-semibold transition active:scale-[0.97] ${
+                                                class="min-h-[40px] sm:min-h-[34px] rounded-lg px-2.5 py-1 text-[11px] font-semibold transition active:scale-[0.97] ${
                                                     isCurrent
                                                         ? 'bg-brand-navy text-white'
                                                         : 'border border-border-subtle bg-surface text-ink hover:bg-primary-soft disabled:opacity-50'
@@ -492,4 +524,9 @@ export function mountDashboardView(container) {
     }
 
     loadDashboard();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }

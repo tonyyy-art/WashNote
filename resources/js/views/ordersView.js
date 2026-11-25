@@ -1,4 +1,4 @@
-import { generateIdempotencyKey, washnoteApi } from '../api/client.js';
+import { generateIdempotencyKey, isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion, scrollToElement } from '../motion/motionSystem.js';
 import { APP_VIEWS, isOwner, navigateBack, navigateTo, showToast } from '../state/store.js';
 import {
@@ -23,6 +23,8 @@ import {
 
 export function mountOrdersListView(container) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let isLoading = true;
     let errorObj = null;
     let ordersPage = null;
@@ -40,23 +42,39 @@ export function mountOrdersListView(container) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
-            const res = await washnoteApi.getOrders({
-                scope: 'all',
-                ...filters,
-                per_page: 10,
-            });
+            const res = await washnoteApi.getOrders(
+                {
+                    scope: 'all',
+                    ...filters,
+                    per_page: 10,
+                },
+                { signal: abortController.signal }
+            );
+            if (isDisposed) {
+                return;
+            }
             ordersPage = res?.data || null;
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isLoading = false;
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         const items = ordersPage?.data || [];
         const hasFilter =
             filters.search !== '' ||
@@ -322,10 +340,17 @@ export function mountOrdersListView(container) {
     }
 
     loadOrders();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }
 
 export function mountOrderCreateView(container) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let isLoadingCatalog = true;
     let isSubmitting = false;
     let errorObj = null;
@@ -408,8 +433,15 @@ export function mountOrderCreateView(container) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
-            const [catRes, schedRes] = await Promise.all([washnoteApi.getCatalog(), washnoteApi.getOperatingStatus()]);
+            const [catRes, schedRes] = await Promise.all([
+                washnoteApi.getCatalog({ signal: abortController.signal }),
+                washnoteApi.getOperatingStatus({ signal: abortController.signal }),
+            ]);
+            if (isDisposed) {
+                return;
+            }
             catalog = catRes?.data || { kategori_kendaraan: [], layanan: [], harga_layanan: [] };
             scheduleStatus = schedRes?.data || null;
 
@@ -417,16 +449,22 @@ export function mountOrderCreateView(container) {
                 vehicles = [buildDefaultVehicle()];
             }
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isLoadingCatalog = false;
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
     async function submitOrder(forceHolidayConfirm = null) {
-        if (isSubmitting) {
+        if (isDisposed || isSubmitting) {
             return;
         }
 
@@ -467,7 +505,10 @@ export function mountOrderCreateView(container) {
         render();
 
         try {
-            const res = await washnoteApi.createOrder(payload, currentIdempotencyKey);
+            const res = await washnoteApi.createOrder(payload, currentIdempotencyKey, { signal: abortController.signal });
+            if (isDisposed) {
+                return;
+            }
             const createdOrder = res?.data?.pesanan;
             const warnings = res?.warnings || [];
             showToast(
@@ -483,6 +524,9 @@ export function mountOrderCreateView(container) {
                 replaceUrl: true,
             });
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                return;
+            }
             if (err.status === 409 && err.errorCode === 'HOLIDAY_CONFIRMATION_REQUIRED') {
                 holidayConfirmationRequired = true;
             }
@@ -526,6 +570,9 @@ export function mountOrderCreateView(container) {
     }
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         const preview = calculateTotalsPreview();
         const noCatalogReady = !isLoadingCatalog && !errorObj && (catalog.kategori_kendaraan.length === 0 || catalog.harga_layanan.length === 0);
         const showOperationalAlert =
@@ -653,7 +700,7 @@ export function mountOrderCreateView(container) {
                                 `}
 
                                 ${scheduleStatus?.perlu_konfirmasi_hari_libur ? `
-                                    <label class="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                                    <label for="create-order-holiday-confirm" class="mt-3 flex min-h-[40px] items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                                         <input id="create-order-holiday-confirm" type="checkbox" ${konfirmasiHariLibur ? 'checked' : ''} class="wn-checkbox mt-0.5" />
                                         <span>Saya mengonfirmasi pembuatan pesanan pada hari libur operasional.</span>
                                     </label>
@@ -790,4 +837,9 @@ export function mountOrderCreateView(container) {
     }
 
     loadInitialData();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }

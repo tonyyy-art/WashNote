@@ -1,4 +1,4 @@
-import { washnoteApi } from '../api/client.js';
+import { isAbortError, washnoteApi } from '../api/client.js';
 import { createViewMotion } from '../motion/motionSystem.js';
 import { APP_VIEWS, navigateBack, navigateTo } from '../state/store.js';
 import {
@@ -14,6 +14,8 @@ import {
 
 export function mountOwnerReportsView(container) {
     const motion = createViewMotion(container);
+    const abortController = new AbortController();
+    let isDisposed = false;
     let isLoading = true;
     let errorObj = null;
 
@@ -39,20 +41,31 @@ export function mountOwnerReportsView(container) {
         errorObj = null;
         render();
 
+        let wasAborted = false;
         try {
             const [sumRes, dailyRes] = await Promise.all([
-                washnoteApi.getReportSummary({ tanggal_mulai: reportStart, tanggal_akhir: reportEnd }),
-                washnoteApi.getReportDaily({ tanggal_mulai: reportStart, tanggal_akhir: reportEnd }),
+                washnoteApi.getReportSummary({ tanggal_mulai: reportStart, tanggal_akhir: reportEnd }, { signal: abortController.signal }),
+                washnoteApi.getReportDaily({ tanggal_mulai: reportStart, tanggal_akhir: reportEnd }, { signal: abortController.signal }),
             ]);
+
+            if (isDisposed) {
+                return;
+            }
 
             reportSummary = sumRes?.data || null;
             reportDaily = dailyRes?.data || [];
         } catch (err) {
+            if (isDisposed || isAbortError(err)) {
+                wasAborted = true;
+                return;
+            }
             errorObj = err;
         } finally {
             isLoading = false;
-            render();
-            motion.runIntro();
+            if (!isDisposed && !wasAborted) {
+                render();
+                motion.runIntro();
+            }
         }
     }
 
@@ -82,9 +95,9 @@ export function mountOwnerReportsView(container) {
                         <button type="submit" class="wn-btn-primary w-full sm:w-auto">Tampilkan</button>
                     </div>
                     <div class="flex flex-wrap items-center gap-1.5">
-                        <button type="button" data-rep-preset="today" class="wn-btn-secondary min-h-[36px] flex-1 px-3 py-1.5 text-xs sm:flex-none">Hari Ini</button>
-                        <button type="button" data-rep-preset="7d" class="wn-btn-secondary min-h-[36px] flex-1 px-3 py-1.5 text-xs sm:flex-none">7 Hari</button>
-                        <button type="button" data-rep-preset="month" class="wn-btn-secondary min-h-[36px] flex-1 px-3 py-1.5 text-xs sm:flex-none">Bulan Ini</button>
+                        <button type="button" data-rep-preset="today" class="wn-btn-secondary min-h-[40px] sm:min-h-[36px] flex-1 px-3 py-1.5 text-xs sm:flex-none">Hari Ini</button>
+                        <button type="button" data-rep-preset="7d" class="wn-btn-secondary min-h-[40px] sm:min-h-[36px] flex-1 px-3 py-1.5 text-xs sm:flex-none">7 Hari</button>
+                        <button type="button" data-rep-preset="month" class="wn-btn-secondary min-h-[40px] sm:min-h-[36px] flex-1 px-3 py-1.5 text-xs sm:flex-none">Bulan Ini</button>
                     </div>
                 </form>
 
@@ -184,6 +197,9 @@ export function mountOwnerReportsView(container) {
     }
 
     function render() {
+        if (isDisposed) {
+            return;
+        }
         const hasAnyData = Boolean(reportSummary) || reportDaily.length > 0;
 
         container.innerHTML = `
@@ -243,4 +259,9 @@ export function mountOwnerReportsView(container) {
     }
 
     loadReports();
+
+    return () => {
+        isDisposed = true;
+        abortController.abort();
+    };
 }

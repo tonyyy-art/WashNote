@@ -319,7 +319,7 @@ export function renderEmptyState({ kind = 'empty', title, message = '', actionsH
     return `
         <div data-motion-state class="rounded-xl border ${toneCls} p-6 text-center sm:p-8">
             <p class="text-sm font-semibold">${escapeHtml(title)}</p>
-            ${message ? `<p class="mt-1 text-xs opacity-85">${escapeHtml(message)}</p>` : ''}
+            ${message ? `<p class="mt-1 text-xs ${kind === 'error' || kind === 'prerequisite' ? 'opacity-95' : 'text-ink-muted'}">${escapeHtml(message)}</p>` : ''}
             ${actionsHtml ? `<div class="mt-4 flex flex-wrap items-center justify-center gap-2">${actionsHtml}</div>` : ''}
         </div>
     `;
